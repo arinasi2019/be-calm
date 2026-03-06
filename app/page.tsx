@@ -44,13 +44,10 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen bg-[#fafafa] text-slate-900">
       <div className="mx-auto max-w-3xl px-4 py-6">
-
         {/* Header */}
         <header className="sticky top-0 z-20 mb-6 rounded-3xl border border-slate-200 bg-white/95 px-5 py-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between">
-
             <div className="flex items-center gap-3">
-
               <img
                 src="/becalm-main-logo.png"
                 alt="避坑 Be Calm"
@@ -66,7 +63,6 @@ export default async function HomePage() {
                   不種草，只避雷
                 </div>
               </div>
-
             </div>
 
             <Link
@@ -75,13 +71,11 @@ export default async function HomePage() {
             >
               發貼文
             </Link>
-
           </div>
         </header>
 
         {/* Hero */}
         <section className="mb-6 rounded-3xl bg-gradient-to-br from-[#111827] via-[#0f172a] to-[#1e293b] px-6 py-8 text-white shadow-xl">
-
           <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs">
             年輕人的反推薦平台
           </div>
@@ -96,12 +90,10 @@ export default async function HomePage() {
             分享真實踩雷、避坑心得、雷店、雷商品、雷服務。
             在花錢前，先看大家踩過哪些坑。
           </p>
-
         </section>
 
         {/* Feed */}
         <section className="space-y-6">
-
           {posts.length === 0 ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
               目前還沒有貼文，來發第一篇吧。
@@ -112,12 +104,9 @@ export default async function HomePage() {
                 key={post.id}
                 className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
               >
-
                 {/* 作者列 */}
                 <div className="flex items-center justify-between px-5 py-4">
-
                   <div className="flex items-center gap-3">
-
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500 text-sm font-bold text-white">
                       坑
                     </div>
@@ -131,13 +120,9 @@ export default async function HomePage() {
                         {formatDate(post.created_at)}
                       </div>
                     </div>
-
                   </div>
 
-                  <div className="text-xs text-slate-400">
-                    ⋯
-                  </div>
-
+                  <div className="text-xs text-slate-400">⋯</div>
                 </div>
 
                 {/* 圖片 */}
@@ -149,11 +134,20 @@ export default async function HomePage() {
                   />
                 )}
 
-                <div className="px-5 py-5">
+                {/* 影片 */}
+                {post.video_url && (
+                  <video
+                    src={post.video_url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full bg-black"
+                  />
+                )}
 
+                <div className="px-5 py-5">
                   {/* tags */}
                   <div className="mb-3 flex flex-wrap gap-2">
-
                     <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                       {post.category}
                     </span>
@@ -164,6 +158,16 @@ export default async function HomePage() {
                       </span>
                     )}
 
+                    {post.google_maps_url && (
+                      <a
+                        href={post.google_maps_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+                      >
+                        Google 店家
+                      </a>
+                    )}
                   </div>
 
                   <h2 className="text-2xl font-black text-slate-900">
@@ -175,15 +179,11 @@ export default async function HomePage() {
                   </p>
 
                   <PostActions postId={post.id} />
-
                 </div>
-
               </article>
             ))
           )}
-
         </section>
-
       </div>
     </main>
   );
