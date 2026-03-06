@@ -81,8 +81,8 @@ function RankingBlock({
   posts: RankedPost[];
 }) {
   return (
-    <div className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
-      <h3 className={`text-lg font-black ${colorClass}`}>{title}</h3>
+    <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
+      <h3 className={`text-base font-black ${colorClass}`}>{title}</h3>
 
       {posts.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">目前沒有資料</p>
@@ -201,11 +201,66 @@ export default async function HomePage() {
 
         <section className="mb-6 rounded-[32px] bg-slate-200/70 p-3 sm:p-4">
           <div className="mb-3 px-2">
-            <h2 className="text-xl font-black text-slate-900">避坑排行榜</h2>
-            <p className="text-xs text-slate-500">快速看最近最坑、最熱的內容</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">避坑排行榜</h2>
+                <p className="text-xs text-slate-500">快速看最近最坑、最熱的內容</p>
+              </div>
+
+              <div className="md:hidden rounded-full bg-white/70 px-3 py-1 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
+                ← 左右滑動查看 →
+              </div>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* 手機：slider */}
+          <div className="md:hidden">
+            <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex snap-x snap-mandatory gap-3 px-1">
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="🔥 今日最坑"
+                    colorClass="text-rose-600"
+                    posts={todayHot}
+                  />
+                </div>
+
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="🔥 本週最坑"
+                    colorClass="text-orange-600"
+                    posts={weekHot}
+                  />
+                </div>
+
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="🔥 全站最坑"
+                    colorClass="text-fuchsia-600"
+                    posts={allTimeHot}
+                  />
+                </div>
+
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="🔥 最新踩雷"
+                    colorClass="text-slate-900"
+                    posts={latestPosts}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-slate-400" />
+              <span className="h-2 w-2 rounded-full bg-slate-300" />
+              <span className="h-2 w-2 rounded-full bg-slate-300" />
+              <span className="h-2 w-2 rounded-full bg-slate-300" />
+            </div>
+          </div>
+
+          {/* 桌機：2x2 */}
+          <div className="hidden gap-4 md:grid md:grid-cols-2">
             <RankingBlock
               title="🔥 今日最坑"
               colorClass="text-rose-600"
