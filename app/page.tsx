@@ -72,7 +72,11 @@ function RankingBlock({
       ) : (
         <div className="mt-4 space-y-3">
           {posts.map((post, index) => (
-            <div key={post.id} className="rounded-2xl bg-slate-50 p-3">
+            <a
+              key={post.id}
+              href={`#post-${post.id}`}
+              className="block rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100"
+            >
               <div className="text-sm font-bold text-slate-900">
                 #{index + 1} {post.title}
               </div>
@@ -82,7 +86,7 @@ function RankingBlock({
               <div className="mt-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
                 坑 {post.pitCount}
               </div>
-            </div>
+            </a>
           ))}
         </div>
       )}
@@ -148,7 +152,6 @@ export default async function HomePage() {
           </div>
         </header>
 
-        {/* 排行榜 */}
         <section className="mb-6 grid gap-4 md:grid-cols-3">
           <RankingBlock
             title="🔥 今日最坑"
@@ -169,7 +172,6 @@ export default async function HomePage() {
           />
         </section>
 
-        {/* 原本 feed / 搜尋 / 收藏 */}
         <PostFeed posts={posts} />
       </div>
     </main>
