@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 type Comment = {
@@ -14,7 +14,6 @@ type Comment = {
 type Vote = {
   id: number;
   post_id: number;
-  vote_type: "very_bad" | "neutral" | "not_bad";
 };
 
 function getAnonymousName() {
@@ -30,8 +29,7 @@ function getAnonymousName() {
 
 function formatCommentTime(dateString?: string) {
   if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleString("zh-TW");
+  return new Date(dateString).toLocaleString("zh-TW");
 }
 
 function avatarText(name?: string | null) {
@@ -44,15 +42,26 @@ export default function PostActions({ postId }: { postId: number }) {
   const [commentText, setCommentText] = useState("");
   const [loading, setLoading] = useState(false);
   const [nickname, setNickname] = useState("匿名用戶");
-
-  const [veryBadCount, setVeryBadCount] = useState(0);
-  const [neutralCount, setNeutralCount] = useState(0);
-  const [notBadCount, setNotBadCount] = useState(0);
+  const [pitCount, setPitCount] = useState(0);
+  const [pitLoading, setPitLoading] = useState(false);
+  const [hasPitted, setHasPitted] = useState(false);
 
   useEffect(() => {
     setNickname(getAnonymousName());
     fetchComments();
-    fetchVotes();
+    fetchPits();
+
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("be-calm-pitted-posts");
+      if (raw) {
+        try {
+          const ids = JSON.parse(raw) as number[];
+          setHasPitted(ids.includes(postId));
+        } catch {
+          setHasPitted(false);
+        }
+      }
+    }
   }, [postId]);
 
   async function fetchComments() {
@@ -65,25 +74,46 @@ export default function PostActions({ postId }: { postId: number }) {
     setComments(data || []);
   }
 
-  async function fetchVotes() {
+  async function fetchPits() {
     const { data } = await supabase
       .from("votes")
-      .select("*")
+      .select("id")
       .eq("post_id", postId);
 
-    const votes = (data || []) as Vote[];
-    setVeryBadCount(votes.filter((v) => v.vote_type === "very_bad").length);
-    setNeutralCount(votes.filter((v) => v.vote_type === "neutral").length);
-    setNotBadCount(votes.filter((v) => v.vote_type === "not_bad").length);
+    setPitCount((data || []).length);
   }
 
-  async function handleVote(voteType: "very_bad" | "neutral" | "not_bad") {
-    await supabase.from("votes").insert({
+  async function handlePit() {
+    if (hasPitted) return;
+
+    setPitLoading(true);
+
+    const { error } = await supabase.from("votes").insert({
       post_id: postId,
-      vote_type: voteType,
     });
 
-    fetchVotes();
+    if (!error) {
+      setPitCount((prev) => prev + 1);
+      setHasPitted(true);
+
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem("be-calm-pitted-posts");
+        let ids: number[] = [];
+
+        if (raw) {
+          try {
+            ids = JSON.parse(raw);
+          } catch {
+            ids = [];
+          }
+        }
+
+        const next = Array.from(new Set([...ids, postId]));
+        localStorage.setItem("be-calm-pitted-posts", JSON.stringify(next));
+      }
+    }
+
+    setPitLoading(false);
   }
 
   async function handleComment() {
@@ -91,62 +121,42 @@ export default function PostActions({ postId }: { postId: number }) {
 
     setLoading(true);
 
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert({
       post_id: postId,
       content: commentText,
       nickname,
     });
 
-    setCommentText("");
-    setLoading(false);
-    fetchComments();
-  }
+    if (!error) {
+      setCommentText("");
+      fetchComments();
+    }
 
-  const totalVotes = useMemo(
-    () => veryBadCount + neutralCount + notBadCount,
-    [veryBadCount, neutralCount, notBadCount]
-  );
+    setLoading(false);
+  }
 
   return (
     <div className="mt-5 border-t border-slate-100 pt-4">
-      {/* IG 風互動列 */}
+      {/* 主互動列 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => handleVote("very_bad")}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 transition hover:scale-105"
-          >
-            <span className="text-xl">😡</span>
-            <span>{veryBadCount}</span>
-          </button>
+        <button
+          onClick={handlePit}
+          disabled={pitLoading || hasPitted}
+          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+            hasPitted
+              ? "bg-rose-100 text-rose-700"
+              : "bg-slate-900 text-white hover:opacity-90"
+          }`}
+        >
+          {hasPitted ? "已踩坑" : pitLoading ? "送出中..." : "坑 +1"}
+        </button>
 
-          <button
-            onClick={() => handleVote("neutral")}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 transition hover:scale-105"
-          >
-            <span className="text-xl">🤨</span>
-            <span>{neutralCount}</span>
-          </button>
-
-          <button
-            onClick={() => handleVote("not_bad")}
-            className="flex items-center gap-2 text-sm font-medium text-slate-700 transition hover:scale-105"
-          >
-            <span className="text-xl">👍</span>
-            <span>{notBadCount}</span>
-          </button>
+        <div className="text-sm text-slate-500">
+          已有 <span className="font-semibold text-slate-900">{pitCount}</span> 人踩坑
         </div>
-
-        <div className="text-xs text-slate-400">共 {totalVotes} 票</div>
       </div>
 
-      {/* 統計文字 */}
-      <div className="mt-3 text-sm text-slate-600">
-        <span className="font-semibold text-slate-900">{veryBadCount}</span> 人覺得很雷，
-        <span className="ml-1 font-semibold text-slate-900">{comments.length}</span> 則留言
-      </div>
-
-      {/* 留言輸入 */}
+      {/* 留言區 */}
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
         <div className="mb-2 text-xs text-slate-500">
           目前身分：<span className="font-medium text-slate-700">{nickname}</span>
@@ -157,16 +167,16 @@ export default function PostActions({ postId }: { postId: number }) {
             type="text"
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            placeholder="新增留言..."
+            placeholder="補充你的踩雷經驗..."
             className="flex-1 bg-transparent px-2 py-2 text-sm outline-none"
           />
 
           <button
             onClick={handleComment}
             disabled={loading}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 ring-1 ring-slate-200 disabled:opacity-50"
           >
-            {loading ? "送出中..." : "送出"}
+            {loading ? "送出中..." : "留言"}
           </button>
         </div>
       </div>
