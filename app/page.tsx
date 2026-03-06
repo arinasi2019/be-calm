@@ -1,10 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import PostFeed from "./components/PostFeed";
 
 type Post = {
   id: number;
   title: string;
   category: string;
+  country?: string | null;
+  city?: string | null;
   location: string;
   content: string;
   created_at: string | null;
@@ -19,44 +24,19 @@ type Vote = {
   post_id: number;
 };
 
+type Comment = {
+  id: number;
+  post_id: number;
+};
+
 const SUPABASE_URL = "https://hqnyqqmqpjmuyanmupxr.supabase.co";
 const SUPABASE_KEY = "sb_publishable_IP_qqclWTJZfTeuTWNurTg_1Kbe6z9W";
 
-async function getPosts(): Promise<Post[]> {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/posts?select=*&order=id.desc`,
-    {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-      cache: "no-store",
-    }
-  );
-
-  if (!res.ok) return [];
-  return res.json();
-}
-
-async function getVotes(): Promise<Vote[]> {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/votes?select=id,post_id`,
-    {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-      cache: "no-store",
-    }
-  );
-
-  if (!res.ok) return [];
-  return res.json();
-}
-
 type RankedPost = Post & {
   pitCount: number;
+  commentCount: number;
   hotScore: number;
+  trendScore: number;
 };
 
 function getHoursAgo(dateString: string | null) {
@@ -66,19 +46,26 @@ function getHoursAgo(dateString: string | null) {
   return Math.max(1, (now - created) / (1000 * 60 * 60));
 }
 
-function getHotScore(post: Post, pitCount: number) {
+function getHotScore(post: Post, pitCount: number, commentCount: number) {
   const hoursAgo = getHoursAgo(post.created_at);
-  return pitCount * 1000 + 100 / Math.pow(hoursAgo + 2, 0.7);
+  return pitCount * 10 + commentCount * 4 + 100 / Math.pow(hoursAgo + 2, 0.7);
+}
+
+function getTrendScore(post: Post, pitCount: number, commentCount: number) {
+  const hoursAgo = getHoursAgo(post.created_at);
+  return (pitCount * 8 + commentCount * 3) / Math.pow(hoursAgo + 2, 0.8);
 }
 
 function RankingBlock({
   title,
   colorClass,
   posts,
+  metricLabel,
 }: {
   title: string;
   colorClass: string;
   posts: RankedPost[];
+  metricLabel: "坑" | "留言" | "熱度";
 }) {
   return (
     <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
@@ -99,17 +86,27 @@ function RankingBlock({
               </div>
 
               <div className="mt-1 text-xs text-slate-500">
-                {post.place_name || post.location || post.category}
+                {[post.category, post.country, post.city].filter(Boolean).join("・")}
               </div>
 
               <div className="mt-2 flex flex-wrap gap-2">
-                <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                  坑 {post.pitCount}
-                </span>
+                {metricLabel === "坑" && (
+                  <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                    坑 {post.pitCount}
+                  </span>
+                )}
 
-                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                  熱度 {post.hotScore.toFixed(1)}
-                </span>
+                {metricLabel === "留言" && (
+                  <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                    留言 {post.commentCount}
+                  </span>
+                )}
+
+                {metricLabel === "熱度" && (
+                  <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                    熱度 {post.trendScore.toFixed(1)}
+                  </span>
+                )}
               </div>
             </a>
           ))}
@@ -119,39 +116,119 @@ function RankingBlock({
   );
 }
 
-export default async function HomePage() {
-  const [posts, votes] = await Promise.all([getPosts(), getVotes()]);
-
-  const postsWithStats: RankedPost[] = posts.map((post) => {
-    const pitCount = votes.filter((vote) => vote.post_id === post.id).length;
-    const hotScore = getHotScore(post, pitCount);
-    return { ...post, pitCount, hotScore };
+async function fetchJson<T>(path: string): Promise<T> {
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+    cache: "no-store",
   });
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  if (!res.ok) {
+    throw new Error("fetch failed");
+  }
 
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  return res.json();
+}
 
-  const todayHot = [...postsWithStats]
-    .filter((post) => post.created_at && new Date(post.created_at) >= startOfToday)
+export default function HomePage() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [votes, setVotes] = useState<Vote[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+
+  const [selectedCategory, setSelectedCategory] = useState("全部");
+  const [selectedCountry, setSelectedCountry] = useState("全部");
+  const [selectedCity, setSelectedCity] = useState("全部");
+
+  useEffect(() => {
+    async function load() {
+      const [postsData, votesData, commentsData] = await Promise.all([
+        fetchJson<Post[]>("/rest/v1/posts?select=*&order=id.desc"),
+        fetchJson<Vote[]>("/rest/v1/votes?select=id,post_id"),
+        fetchJson<Comment[]>("/rest/v1/comments?select=id,post_id"),
+      ]);
+
+      setPosts(postsData);
+      setVotes(votesData);
+      setComments(commentsData);
+    }
+
+    load();
+  }, []);
+
+  const categories = ["全部", "店家", "商品", "旅遊", "服務"];
+
+  const countries = useMemo(() => {
+    const items = Array.from(
+      new Set(posts.map((p) => p.country).filter(Boolean))
+    ) as string[];
+    return ["全部", ...items];
+  }, [posts]);
+
+  const cities = useMemo(() => {
+    const filtered = posts.filter((p) => {
+      if (selectedCountry === "全部") return true;
+      return p.country === selectedCountry;
+    });
+
+    const items = Array.from(
+      new Set(filtered.map((p) => p.city).filter(Boolean))
+    ) as string[];
+
+    return ["全部", ...items];
+  }, [posts, selectedCountry]);
+
+  const postsWithStats: RankedPost[] = useMemo(() => {
+    return posts.map((post) => {
+      const pitCount = votes.filter((vote) => vote.post_id === post.id).length;
+      const commentCount = comments.filter((c) => c.post_id === post.id).length;
+      const hotScore = getHotScore(post, pitCount, commentCount);
+      const trendScore = getTrendScore(post, pitCount, commentCount);
+
+      return {
+        ...post,
+        pitCount,
+        commentCount,
+        hotScore,
+        trendScore,
+      };
+    });
+  }, [posts, votes, comments]);
+
+  const filteredPosts = useMemo(() => {
+    return postsWithStats.filter((post) => {
+      const matchCategory =
+        selectedCategory === "全部" || post.category === selectedCategory;
+
+      const matchCountry =
+        selectedCountry === "全部" || post.country === selectedCountry;
+
+      const matchCity = selectedCity === "全部" || post.city === selectedCity;
+
+      return matchCategory && matchCountry && matchCity;
+    });
+  }, [postsWithStats, selectedCategory, selectedCountry, selectedCity]);
+
+  const allTimeHot = [...filteredPosts]
+    .sort((a, b) => b.pitCount - a.pitCount || b.hotScore - a.hotScore)
+    .slice(0, 5);
+
+  const latestPosts = [...filteredPosts]
     .sort((a, b) => {
-      if (b.pitCount !== a.pitCount) return b.pitCount - a.pitCount;
-      return b.hotScore - a.hotScore;
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bt - at;
     })
     .slice(0, 5);
 
-  const weekHot = [...postsWithStats]
-    .filter((post) => post.created_at && new Date(post.created_at) >= sevenDaysAgo)
-    .sort((a, b) => b.hotScore - a.hotScore)
+  const mostDiscussed = [...filteredPosts]
+    .sort((a, b) => b.commentCount - a.commentCount || b.hotScore - a.hotScore)
     .slice(0, 5);
 
-  const allTimeHot = [...postsWithStats]
-    .sort((a, b) => b.hotScore - a.hotScore)
+  const trending = [...filteredPosts]
+    .sort((a, b) => b.trendScore - a.trendScore)
     .slice(0, 5);
-
-  const latestPosts = [...postsWithStats].slice(0, 5);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
@@ -199,12 +276,77 @@ export default async function HomePage() {
           </p>
         </section>
 
+        {/* 類別篩選 */}
+        <section className="mb-3">
+          <div className="mb-2 text-xs font-semibold text-slate-500">類別</div>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {categories.map((item) => (
+              <button
+                key={item}
+                onClick={() => setSelectedCategory(item)}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
+                  selectedCategory === item
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-700 ring-1 ring-slate-200"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* 國家篩選 */}
+        <section className="mb-3">
+          <div className="mb-2 text-xs font-semibold text-slate-500">國家</div>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {countries.map((item) => (
+              <button
+                key={item}
+                onClick={() => {
+                  setSelectedCountry(item);
+                  setSelectedCity("全部");
+                }}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
+                  selectedCountry === item
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-700 ring-1 ring-slate-200"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {/* 城市篩選 */}
+        <section className="mb-6">
+          <div className="mb-2 text-xs font-semibold text-slate-500">城市</div>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {cities.map((item) => (
+              <button
+                key={item}
+                onClick={() => setSelectedCity(item)}
+                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
+                  selectedCity === item
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-700 ring-1 ring-slate-200"
+                }`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
+
         <section className="mb-6 rounded-[32px] bg-slate-200/70 p-3 sm:p-4">
           <div className="mb-3 px-2">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-black text-slate-900">避坑排行榜</h2>
-                <p className="text-xs text-slate-500">快速看最近最坑、最熱的內容</p>
+                <p className="text-xs text-slate-500">
+                  目前篩選：{selectedCategory} / {selectedCountry} / {selectedCity}
+                </p>
               </div>
 
               <div className="md:hidden rounded-full bg-white/70 px-3 py-1 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
@@ -213,39 +355,43 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* 手機：slider */}
+          {/* 手機 */}
           <div className="md:hidden">
             <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex snap-x snap-mandatory gap-3 px-1">
                 <div className="min-w-[84%] snap-center">
                   <RankingBlock
-                    title="🔥 今日最坑"
-                    colorClass="text-rose-600"
-                    posts={todayHot}
-                  />
-                </div>
-
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock
-                    title="🔥 本週最坑"
-                    colorClass="text-orange-600"
-                    posts={weekHot}
-                  />
-                </div>
-
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock
                     title="🔥 全站最坑"
-                    colorClass="text-fuchsia-600"
+                    colorClass="text-rose-600"
                     posts={allTimeHot}
+                    metricLabel="坑"
                   />
                 </div>
 
                 <div className="min-w-[84%] snap-center">
                   <RankingBlock
-                    title="🔥 最新踩雷"
+                    title="🆕 最新踩雷"
                     colorClass="text-slate-900"
                     posts={latestPosts}
+                    metricLabel="坑"
+                  />
+                </div>
+
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="💬 討論最多"
+                    colorClass="text-sky-600"
+                    posts={mostDiscussed}
+                    metricLabel="留言"
+                  />
+                </div>
+
+                <div className="min-w-[84%] snap-center">
+                  <RankingBlock
+                    title="⚡ 最近爆雷"
+                    colorClass="text-amber-600"
+                    posts={trending}
+                    metricLabel="熱度"
                   />
                 </div>
               </div>
@@ -259,35 +405,39 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* 桌機：2x2 */}
+          {/* 桌機 */}
           <div className="hidden gap-4 md:grid md:grid-cols-2">
             <RankingBlock
-              title="🔥 今日最坑"
-              colorClass="text-rose-600"
-              posts={todayHot}
-            />
-
-            <RankingBlock
-              title="🔥 本週最坑"
-              colorClass="text-orange-600"
-              posts={weekHot}
-            />
-
-            <RankingBlock
               title="🔥 全站最坑"
-              colorClass="text-fuchsia-600"
+              colorClass="text-rose-600"
               posts={allTimeHot}
+              metricLabel="坑"
             />
 
             <RankingBlock
-              title="🔥 最新踩雷"
+              title="🆕 最新踩雷"
               colorClass="text-slate-900"
               posts={latestPosts}
+              metricLabel="坑"
+            />
+
+            <RankingBlock
+              title="💬 討論最多"
+              colorClass="text-sky-600"
+              posts={mostDiscussed}
+              metricLabel="留言"
+            />
+
+            <RankingBlock
+              title="⚡ 最近爆雷"
+              colorClass="text-amber-600"
+              posts={trending}
+              metricLabel="熱度"
             />
           </div>
         </section>
 
-        <PostFeed posts={posts} />
+        <PostFeed posts={filteredPosts} />
       </div>
     </main>
   );
