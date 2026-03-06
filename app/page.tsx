@@ -54,6 +54,23 @@ async function getVotes(): Promise<Vote[]> {
   return res.json();
 }
 
+type RankedPost = Post & {
+  pitCount: number;
+  hotScore: number;
+};
+
+function getHoursAgo(dateString: string | null) {
+  if (!dateString) return 999999;
+  const created = new Date(dateString).getTime();
+  const now = Date.now();
+  return Math.max(1, (now - created) / (1000 * 60 * 60));
+}
+
+function getHotScore(post: Post, pitCount: number) {
+  const hoursAgo = getHoursAgo(post.created_at);
+  return pitCount * 1000 + 100 / Math.pow(hoursAgo + 2, 0.7);
+}
+
 function RankingBlock({
   title,
   colorClass,
@@ -61,7 +78,7 @@ function RankingBlock({
 }: {
   title: string;
   colorClass: string;
-  posts: Array<Post & { pitCount: number }>;
+  posts: RankedPost[];
 }) {
   return (
     <div className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-200/70">
@@ -80,11 +97,19 @@ function RankingBlock({
               <div className="text-sm font-bold text-slate-900">
                 #{index + 1} {post.title}
               </div>
+
               <div className="mt-1 text-xs text-slate-500">
                 {post.place_name || post.location || post.category}
               </div>
-              <div className="mt-2 inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                坑 {post.pitCount}
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                  坑 {post.pitCount}
+                </span>
+
+                <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  熱度 {post.hotScore.toFixed(1)}
+                </span>
               </div>
             </a>
           ))}
@@ -97,28 +122,36 @@ function RankingBlock({
 export default async function HomePage() {
   const [posts, votes] = await Promise.all([getPosts(), getVotes()]);
 
-  const postsWithPit = posts.map((post) => {
+  const postsWithStats: RankedPost[] = posts.map((post) => {
     const pitCount = votes.filter((vote) => vote.post_id === post.id).length;
-    return { ...post, pitCount };
+    const hotScore = getHotScore(post, pitCount);
+    return { ...post, pitCount, hotScore };
   });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-  const todayHot = [...postsWithPit]
-    .filter((post) => post.created_at && new Date(post.created_at) >= today)
-    .sort((a, b) => b.pitCount - a.pitCount)
+  const todayHot = [...postsWithStats]
+    .filter((post) => post.created_at && new Date(post.created_at) >= startOfToday)
+    .sort((a, b) => {
+      if (b.pitCount !== a.pitCount) return b.pitCount - a.pitCount;
+      return b.hotScore - a.hotScore;
+    })
     .slice(0, 5);
 
-  const weekHot = [...postsWithPit]
-    .filter((post) => post.created_at && new Date(post.created_at) >= weekAgo)
-    .sort((a, b) => b.pitCount - a.pitCount)
+  const weekHot = [...postsWithStats]
+    .filter((post) => post.created_at && new Date(post.created_at) >= sevenDaysAgo)
+    .sort((a, b) => b.hotScore - a.hotScore)
     .slice(0, 5);
 
-  const latestPosts = [...postsWithPit].slice(0, 5);
+  const allTimeHot = [...postsWithStats]
+    .sort((a, b) => b.hotScore - a.hotScore)
+    .slice(0, 5);
+
+  const latestPosts = [...postsWithStats].slice(0, 5);
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
@@ -169,10 +202,10 @@ export default async function HomePage() {
         <section className="mb-6 rounded-[32px] bg-slate-200/70 p-3 sm:p-4">
           <div className="mb-3 px-2">
             <h2 className="text-xl font-black text-slate-900">避坑排行榜</h2>
-            <p className="text-xs text-slate-500">快速看最近最坑的內容</p>
+            <p className="text-xs text-slate-500">快速看最近最坑、最熱的內容</p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <RankingBlock
               title="🔥 今日最坑"
               colorClass="text-rose-600"
@@ -183,6 +216,12 @@ export default async function HomePage() {
               title="🔥 本週最坑"
               colorClass="text-orange-600"
               posts={weekHot}
+            />
+
+            <RankingBlock
+              title="🔥 全站最坑"
+              colorClass="text-fuchsia-600"
+              posts={allTimeHot}
             />
 
             <RankingBlock
