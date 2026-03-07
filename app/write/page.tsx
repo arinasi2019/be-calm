@@ -145,7 +145,6 @@ export default function WritePage() {
           incident_type: isIncident ? incidentType : null,
           risk_level: isIncident ? riskLevel : null,
           content_type: isIncident ? "incident" : "normal",
-          created_at: new Date().toISOString(),
         },
       ]);
 
