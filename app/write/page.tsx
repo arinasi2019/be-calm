@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import imageCompression from "browser-image-compression";
 import { supabase } from "../lib/supabase";
 
 const COUNTRY_OPTIONS = [
@@ -38,6 +39,20 @@ export default function WritePage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  async function compressImage(file: File) {
+    const options = {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1600,
+      useWebWorker: true,
+    };
+
+    try {
+      return await imageCompression(file, options);
+    } catch {
+      return file;
+    }
+  }
+
   async function uploadFile(file: File, folder: string) {
     const fileExt = file.name.split(".").pop();
     const fileName = `${folder}/${Date.now()}-${Math.random()
@@ -60,7 +75,10 @@ export default function WritePage() {
     const uploaded: MediaItem[] = [];
 
     for (const file of files) {
-      const url = await uploadFile(file, folder);
+      const actualFile =
+        type === "image" ? await compressImage(file) : file;
+
+      const url = await uploadFile(actualFile, folder);
       uploaded.push({ type, url });
     }
 
@@ -93,7 +111,6 @@ export default function WritePage() {
         mediaItems = [...mediaItems, ...uploadedVideos];
       }
 
-      // 為了相容你目前首頁可能還在用 image_url / video_url
       const firstImage =
         mediaItems.find((item) => item.type === "image")?.url || null;
       const firstVideo =
@@ -283,7 +300,7 @@ export default function WritePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">照片（可多選）</label>
+              <label className="mb-2 block text-sm font-medium">照片（可多選，會自動壓縮）</label>
               <input
                 type="file"
                 accept="image/*"

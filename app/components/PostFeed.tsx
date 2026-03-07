@@ -44,15 +44,8 @@ function getMediaList(post: Post): MediaItem[] {
   }
 
   const fallback: MediaItem[] = [];
-
-  if (post.image_url) {
-    fallback.push({ type: "image", url: post.image_url });
-  }
-
-  if (post.video_url) {
-    fallback.push({ type: "video", url: post.video_url });
-  }
-
+  if (post.image_url) fallback.push({ type: "image", url: post.image_url });
+  if (post.video_url) fallback.push({ type: "video", url: post.video_url });
   return fallback;
 }
 
@@ -88,14 +81,10 @@ function Lightbox({
   }, [onClose, onPrev, onNext]);
 
   if (!mediaList.length) return null;
-
   const current = mediaList[currentIndex];
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/90"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-black/90" onClick={onClose}>
       <button
         onClick={(e) => {
           e.stopPropagation();
@@ -165,9 +154,7 @@ function Lightbox({
                     key={`${media.url}-${index}`}
                     onClick={() => onJump(index)}
                     className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${
-                      currentIndex === index
-                        ? "border-white"
-                        : "border-white/20"
+                      currentIndex === index ? "border-white" : "border-white/20"
                     }`}
                   >
                     {media.type === "image" ? (
@@ -280,12 +267,101 @@ function MediaRail({
   );
 }
 
+function ShareButtons({ post }: { post: Post }) {
+  const shareUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/#post-${post.id}`
+      : `#post-${post.id}`;
+
+  const shareText = `${post.title}｜避坑 Be Calm`;
+
+  async function handleNativeShare() {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: shareText,
+          text: post.content.slice(0, 60),
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        alert("連結已複製");
+      }
+    } catch {}
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert("連結已複製");
+    } catch {
+      alert("複製失敗");
+    }
+  }
+
+  const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(
+    shareUrl
+  )}`;
+  const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+    shareText
+  )}&url=${encodeURIComponent(shareUrl)}`;
+  const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(
+    shareUrl
+  )}`;
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button
+        onClick={handleNativeShare}
+        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+      >
+        分享
+      </button>
+
+      <button
+        onClick={handleCopy}
+        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
+      >
+        複製連結
+      </button>
+
+      <a
+        href={lineUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700"
+      >
+        LINE
+      </a>
+
+      <a
+        href={xUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700"
+      >
+        X
+      </a>
+
+      <a
+        href={fbUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
+      >
+        Facebook
+      </a>
+    </div>
+  );
+}
+
 export default function PostFeed({ posts }: { posts: Post[] }) {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
   const [savedIds, setSavedIds] = useState<number[]>([]);
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(6);
 
   useEffect(() => {
     const raw = localStorage.getItem("be-calm-saved-posts");
@@ -296,6 +372,20 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         setSavedIds([]);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    function onScroll() {
+      const nearBottom =
+        window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+
+      if (nearBottom) {
+        setVisibleCount((prev) => prev + 4);
+      }
+    }
+
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   function toggleSave(postId: number) {
@@ -349,12 +439,14 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     return posts.filter((post) => savedIds.includes(post.id));
   }, [posts, savedIds]);
 
-  const displayPosts =
+  const sourcePosts =
     activeTab === "saved"
       ? savedPosts
       : activeTab === "search"
       ? searchedPosts
       : posts;
+
+  const displayPosts = sourcePosts.slice(0, visibleCount);
 
   return (
     <>
@@ -382,96 +474,106 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               : "目前還沒有貼文，來發第一篇吧。"}
           </div>
         ) : (
-          displayPosts.map((post, index) => {
-            const isSaved = savedIds.includes(post.id);
+          <>
+            {displayPosts.map((post, index) => {
+              const isSaved = savedIds.includes(post.id);
 
-            return (
-              <article
-                id={`post-${post.id}`}
-                key={post.id}
-                className={`scroll-mt-28 overflow-hidden rounded-[28px] border border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                  index % 2 === 0 ? "bg-white" : "bg-slate-50"
-                }`}
-              >
-                <div className="flex items-center justify-between px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500 text-sm font-bold text-white">
-                      坑
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">
-                        {post.place_name || post.location || "匿名避坑人"}
+              return (
+                <article
+                  id={`post-${post.id}`}
+                  key={post.id}
+                  className={`scroll-mt-28 overflow-hidden rounded-[28px] border border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500 text-sm font-bold text-white">
+                        坑
                       </div>
 
-                      <div className="text-xs text-slate-500">
-                        {formatDate(post.created_at)}
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {post.place_name || post.location || "匿名避坑人"}
+                        </div>
+
+                        <div className="text-xs text-slate-500">
+                          {formatDate(post.created_at)}
+                        </div>
                       </div>
                     </div>
+
+                    <button
+                      onClick={() => toggleSave(post.id)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        isSaved
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {isSaved ? "已收藏" : "收藏"}
+                    </button>
                   </div>
 
-                  <button
-                    onClick={() => toggleSave(post.id)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      isSaved
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {isSaved ? "已收藏" : "收藏"}
-                  </button>
-                </div>
+                  <MediaRail post={post} onOpenMedia={openLightbox} />
 
-                <MediaRail post={post} onOpenMedia={openLightbox} />
-
-                <div className="px-5 py-5">
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
-                      {post.category}
-                    </span>
-
-                    {post.location && (
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-                        {post.location}
+                  <div className="px-5 py-5">
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                        {post.category}
                       </span>
-                    )}
 
-                    {post.google_maps_url && (
-                      <a
-                        href={post.google_maps_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
-                      >
-                        📍 Google 店家
-                      </a>
-                    )}
+                      {post.location && (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                          {post.location}
+                        </span>
+                      )}
 
-                    {post.external_url && (
-                      <a
-                        href={post.external_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
-                      >
-                        {getExternalLabel(post)}
-                      </a>
-                    )}
+                      {post.google_maps_url && (
+                        <a
+                          href={post.google_maps_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+                        >
+                          📍 Google 店家
+                        </a>
+                      )}
+
+                      {post.external_url && (
+                        <a
+                          href={post.external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                        >
+                          {getExternalLabel(post)}
+                        </a>
+                      )}
+                    </div>
+
+                    <h2 className="text-2xl font-black text-slate-900">
+                      {post.title}
+                    </h2>
+
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                      {post.content}
+                    </p>
+
+                    <ShareButtons post={post} />
+
+                    <PostActions postId={post.id} />
                   </div>
+                </article>
+              );
+            })}
 
-                  <h2 className="text-2xl font-black text-slate-900">
-                    {post.title}
-                  </h2>
-
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                    {post.content}
-                  </p>
-
-                  <PostActions postId={post.id} />
-                </div>
-              </article>
-            );
-          })
+            {displayPosts.length < sourcePosts.length && (
+              <div className="text-center text-sm text-slate-500">
+                往下滑可載入更多內容
+              </div>
+            )}
+          </>
         )}
       </section>
 
