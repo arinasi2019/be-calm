@@ -329,6 +329,97 @@ function MediaRail({
   );
 }
 
+function SearchModal({
+  query,
+  setQuery,
+  results,
+  onClose,
+}: {
+  query: string;
+  setQuery: (value: string) => void;
+  results: Post[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/35 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="mx-auto mt-16 max-w-2xl rounded-[28px] bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 p-4">
+          <div className="flex items-center gap-3">
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜尋店家、商品、地點、標題、內容..."
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+            />
+
+            <button
+              onClick={onClose}
+              className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-600"
+            >
+              關閉
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[65vh] overflow-y-auto p-4">
+          {query.trim() === "" ? (
+            <div className="py-10 text-center text-sm text-slate-400">
+              輸入關鍵字開始搜尋
+            </div>
+          ) : results.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-400">
+              找不到符合的內容
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {results.map((post) => (
+                <a
+                  key={post.id}
+                  href={`#post-${post.id}`}
+                  onClick={onClose}
+                  className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
+                >
+                  <div className="text-sm font-bold text-slate-900">
+                    {post.title}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {post.place_name || post.location || post.category}
+                  </div>
+                  <div className="mt-2 line-clamp-2 text-sm text-slate-600">
+                    {post.content}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PostFeed({ posts }: { posts: Post[] }) {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
@@ -336,6 +427,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(6);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("be-calm-saved-posts");
@@ -364,7 +456,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
   const searchedPosts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return posts;
+    if (!q) return [];
 
     return posts.filter((post) => {
       return (
@@ -381,12 +473,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     return posts.filter((post) => savedIds.includes(post.id));
   }, [posts, savedIds]);
 
-  const sourcePosts =
-    activeTab === "saved"
-      ? savedPosts
-      : activeTab === "search"
-      ? searchedPosts
-      : posts;
+  const sourcePosts = activeTab === "saved" ? savedPosts : posts;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -418,6 +505,15 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
     return () => clearTimeout(timer);
   }, [visibleCount, sourcePosts]);
+
+  function handleTabChange(tab: TabType) {
+    if (tab === "search") {
+      setSearchOpen(true);
+      setActiveTab("home");
+      return;
+    }
+    setActiveTab(tab);
+  }
 
   function toggleSave(postId: number) {
     const next = savedIds.includes(postId)
@@ -455,27 +551,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
   return (
     <>
-      {activeTab === "search" && (
-        <section className="mb-5">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜尋店家、地點、標題、內容..."
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
-            />
-          </div>
-        </section>
-      )}
-
       <section className="mb-24 space-y-5">
         {displayPosts.length === 0 ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
             {activeTab === "saved"
               ? "你目前還沒有收藏貼文"
-              : activeTab === "search"
-              ? "找不到符合的內容"
               : "目前還沒有貼文，來發第一篇吧。"}
           </div>
         ) : (
@@ -582,7 +662,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         )}
       </section>
 
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onChange={handleTabChange} />
 
       {lightboxMedia.length > 0 && (
         <Lightbox
@@ -592,6 +672,15 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
           onPrev={showPrevMedia}
           onNext={showNextMedia}
           onJump={setLightboxIndex}
+        />
+      )}
+
+      {searchOpen && (
+        <SearchModal
+          query={query}
+          setQuery={setQuery}
+          results={searchedPosts}
+          onClose={() => setSearchOpen(false)}
         />
       )}
     </>
