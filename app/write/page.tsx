@@ -17,6 +17,9 @@ const COUNTRY_OPTIONS = [
   "其他",
 ];
 
+const INCIDENT_TYPES = ["詐騙", "交易糾紛", "感情雷點", "工作/求職", "其他警示"];
+const RISK_LEVELS = ["低", "中", "高"] as const;
+
 type MediaItem = {
   type: "image" | "video";
   url: string;
@@ -34,10 +37,17 @@ export default function WritePage() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
   const [content, setContent] = useState("");
+
+  const [incidentType, setIncidentType] = useState("");
+  const [riskLevel, setRiskLevel] = useState<"低" | "中" | "高">("中");
+  const [legalConfirmed, setLegalConfirmed] = useState(false);
+
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  const isIncident = category === "人物/事件";
 
   async function compressImage(file: File) {
     const options = {
@@ -75,9 +85,7 @@ export default function WritePage() {
     const uploaded: MediaItem[] = [];
 
     for (const file of files) {
-      const actualFile =
-        type === "image" ? await compressImage(file) : file;
-
+      const actualFile = type === "image" ? await compressImage(file) : file;
       const url = await uploadFile(actualFile, folder);
       uploaded.push({ type, url });
     }
@@ -90,31 +98,35 @@ export default function WritePage() {
     setLoading(true);
     setSubmitted(false);
 
+    if (isIncident) {
+      if (!incidentType) {
+        alert("請先選擇事件類型");
+        setLoading(false);
+        return;
+      }
+
+      if (!legalConfirmed) {
+        alert("請先勾選法律提醒確認");
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       let mediaItems: MediaItem[] = [];
 
       if (imageFiles.length > 0) {
-        const uploadedImages = await uploadMultipleFiles(
-          imageFiles,
-          "images",
-          "image"
-        );
+        const uploadedImages = await uploadMultipleFiles(imageFiles, "images", "image");
         mediaItems = [...mediaItems, ...uploadedImages];
       }
 
       if (videoFiles.length > 0) {
-        const uploadedVideos = await uploadMultipleFiles(
-          videoFiles,
-          "videos",
-          "video"
-        );
+        const uploadedVideos = await uploadMultipleFiles(videoFiles, "videos", "video");
         mediaItems = [...mediaItems, ...uploadedVideos];
       }
 
-      const firstImage =
-        mediaItems.find((item) => item.type === "image")?.url || null;
-      const firstVideo =
-        mediaItems.find((item) => item.type === "video")?.url || null;
+      const firstVideo = mediaItems.find((item) => item.type === "video")?.url || null;
+      const firstImage = mediaItems.find((item) => item.type === "image")?.url || null;
 
       const { error } = await supabase.from("posts").insert([
         {
@@ -130,8 +142,9 @@ export default function WritePage() {
           image_url: firstImage,
           video_url: firstVideo,
           media_urls: mediaItems,
-
-          // ⭐ 新增這行
+          incident_type: isIncident ? incidentType : null,
+          risk_level: isIncident ? riskLevel : null,
+          content_type: isIncident ? "incident" : "normal",
           created_at: new Date().toISOString(),
         },
       ]);
@@ -152,6 +165,9 @@ export default function WritePage() {
       setGoogleMapsUrl("");
       setExternalUrl("");
       setContent("");
+      setIncidentType("");
+      setRiskLevel("中");
+      setLegalConfirmed(false);
       setImageFiles([]);
       setVideoFiles([]);
       setLoading(false);
@@ -168,7 +184,6 @@ export default function WritePage() {
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
       <div className="mx-auto max-w-2xl space-y-5">
-
         <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -189,7 +204,6 @@ export default function WritePage() {
 
         <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <form onSubmit={handleSubmit} className="space-y-4">
-
             <div>
               <label className="mb-2 block text-sm font-medium">標題</label>
               <input
@@ -232,11 +246,122 @@ export default function WritePage() {
               </div>
             </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium">城市</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="例如：東京 / 大阪 / 台北"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  {isIncident ? "發生地區 / 對象簡稱" : "地區 / 店名"}
+                </label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder={
+                    isIncident
+                      ? "例如：IG / 某交友對象 / 某群組"
+                      : "例如：涉谷 / 信義區 / 某某飯店"
+                  }
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                {isIncident ? "人物 / 事件名稱" : "店家 / 商品名稱"}
+              </label>
+              <input
+                type="text"
+                value={placeName}
+                onChange={(e) => setPlaceName(e.target.value)}
+                placeholder={
+                  isIncident
+                    ? "例如：某投資群 / 某平台 / 某對象"
+                    : "例如：OO燒肉 / XX行李箱 / 某一日遊"
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+              />
+            </div>
+
+            {isIncident && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">事件類型</label>
+                    <select
+                      value={incidentType}
+                      onChange={(e) => setIncidentType(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    >
+                      <option value="">請選擇</option>
+                      {INCIDENT_TYPES.map((item) => (
+                        <option key={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">風險等級</label>
+                    <select
+                      value={riskLevel}
+                      onChange={(e) => setRiskLevel(e.target.value as "低" | "中" | "高")}
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    >
+                      {RISK_LEVELS.map((item) => (
+                        <option key={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  人物 / 事件類內容請避免公開個資，並以真實經驗敘述為主，不要直接做定罪式指控。
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                Google Maps 連結（有店家再填）
+              </label>
+              <input
+                type="url"
+                value={googleMapsUrl}
+                onChange={(e) => setGoogleMapsUrl(e.target.value)}
+                placeholder="貼上 Google Maps 店家連結"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">
+                外部連結（商品 / 官網 / 景點 / 事件參考）
+              </label>
+              <input
+                type="url"
+                value={externalUrl}
+                onChange={(e) => setExternalUrl(e.target.value)}
+                placeholder="貼上商品頁、官網或其他參考連結"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+              />
+            </div>
+
             <div>
               <label className="mb-2 block text-sm font-medium">內容</label>
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                placeholder="請寫下你實際遇到的問題..."
                 rows={7}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                 required
@@ -244,24 +369,48 @@ export default function WritePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">照片</label>
+              <label className="mb-2 block text-sm font-medium">照片（可多選，會自動壓縮）</label>
               <input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={(e) => setImageFiles(Array.from(e.target.files || []))}
+                className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
+              {imageFiles.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  已選擇 {imageFiles.length} 張照片
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">影片</label>
+              <label className="mb-2 block text-sm font-medium">影片（可多選）</label>
               <input
                 type="file"
                 accept="video/*"
                 multiple
                 onChange={(e) => setVideoFiles(Array.from(e.target.files || []))}
+                className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
+              {videoFiles.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  已選擇 {videoFiles.length} 支影片
+                </p>
+              )}
             </div>
+
+            {isIncident && (
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={legalConfirmed}
+                  onChange={(e) => setLegalConfirmed(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>我確認此內容為真實經驗分享，且未公開他人敏感個資或散布不實指控。</span>
+              </label>
+            )}
 
             <button
               type="submit"
@@ -278,7 +427,6 @@ export default function WritePage() {
             )}
           </form>
         </section>
-
       </div>
     </main>
   );
