@@ -428,6 +428,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(6);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [hasHandledHashScroll, setHasHandledHashScroll] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("be-calm-saved-posts");
@@ -441,13 +442,24 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   }, []);
 
   useEffect(() => {
-    function onScroll() {
-      const nearBottom =
-        window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+    let ticking = false;
 
-      if (nearBottom) {
-        setVisibleCount((prev) => prev + 4);
-      }
+    function onScroll() {
+      if (ticking) return;
+
+      ticking = true;
+
+      requestAnimationFrame(() => {
+        const nearBottom =
+          window.innerHeight + window.scrollY >=
+          document.body.offsetHeight - 800;
+
+        if (nearBottom) {
+          setVisibleCount((prev) => prev + 4);
+        }
+
+        ticking = false;
+      });
     }
 
     window.addEventListener("scroll", onScroll);
@@ -492,6 +504,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (hasHandledHashScroll) return;
 
     const hash = window.location.hash;
     if (!hash.startsWith("#post-")) return;
@@ -500,11 +513,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       const el = document.querySelector(hash);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "start" });
+        setHasHandledHashScroll(true);
       }
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [visibleCount, sourcePosts]);
+  }, [sourcePosts, visibleCount, hasHandledHashScroll]);
 
   function handleTabChange(tab: TabType) {
     if (tab === "search") {
