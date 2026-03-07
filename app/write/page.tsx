@@ -26,6 +26,7 @@ export default function WritePage() {
   const [location, setLocation] = useState("");
   const [placeName, setPlaceName] = useState("");
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
+  const [externalUrl, setExternalUrl] = useState("");
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -71,6 +72,7 @@ export default function WritePage() {
           location,
           place_name: placeName || null,
           google_maps_url: googleMapsUrl || null,
+          external_url: externalUrl || null,
           content,
           image_url: imageUrl,
           video_url: videoUrl,
@@ -91,6 +93,7 @@ export default function WritePage() {
       setLocation("");
       setPlaceName("");
       setGoogleMapsUrl("");
+      setExternalUrl("");
       setContent("");
       setImageFile(null);
       setVideoFile(null);
@@ -211,6 +214,17 @@ export default function WritePage() {
                 value={googleMapsUrl}
                 onChange={(e) => setGoogleMapsUrl(e.target.value)}
                 placeholder="貼上 Google Maps 店家連結"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">外部連結（商品 / 官網 / 景點）</label>
+              <input
+                type="url"
+                value={externalUrl}
+                onChange={(e) => setExternalUrl(e.target.value)}
+                placeholder="貼上商品頁、官網或其他參考連結"
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
               />
             </div>

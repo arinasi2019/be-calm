@@ -17,6 +17,7 @@ type Post = {
   video_url?: string | null;
   place_name?: string | null;
   google_maps_url?: string | null;
+  external_url?: string | null;
 };
 
 type Vote = {

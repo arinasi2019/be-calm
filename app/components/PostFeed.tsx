@@ -15,6 +15,7 @@ type Post = {
   video_url?: string | null;
   place_name?: string | null;
   google_maps_url?: string | null;
+  external_url?: string | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -22,6 +23,13 @@ type TabType = "home" | "search" | "saved";
 function formatDate(dateString: string | null) {
   if (!dateString) return "";
   return new Date(dateString).toLocaleString("zh-TW");
+}
+
+function getExternalLabel(post: Post) {
+  if (post.category === "商品") return "🛒 商品連結";
+  if (post.category === "旅遊") return "🗺 相關資訊";
+  if (post.category === "服務") return "🔗 官方網站";
+  return "🔗 相關連結";
 }
 
 export default function PostFeed({ posts }: { posts: Post[] }) {
@@ -112,7 +120,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   index % 2 === 0 ? "bg-white" : "bg-slate-50"
                 }`}
               >
-                {/* 作者列 */}
                 <div className="flex items-center justify-between px-5 py-4">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500 text-sm font-bold text-white">
@@ -142,7 +149,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   </button>
                 </div>
 
-                {/* 圖片 */}
                 {post.image_url && (
                   <img
                     src={post.image_url}
@@ -151,7 +157,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   />
                 )}
 
-                {/* 影片 */}
                 {post.video_url && (
                   <video
                     src={post.video_url}
@@ -163,7 +168,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                 )}
 
                 <div className="px-5 py-5">
-                  {/* tags */}
                   <div className="mb-3 flex flex-wrap gap-2">
                     <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
                       {post.category}
@@ -182,7 +186,18 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         rel="noreferrer"
                         className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
                       >
-                        Google 店家
+                        📍 Google 店家
+                      </a>
+                    )}
+
+                    {post.external_url && (
+                      <a
+                        href={post.external_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                      >
+                        {getExternalLabel(post)}
                       </a>
                     )}
                   </div>
