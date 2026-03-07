@@ -26,9 +26,17 @@ type Post = {
 
 type TabType = "home" | "search" | "saved";
 
-function formatDate(dateString: string | null) {
+function formatDateTime(dateString: string | null) {
   if (!dateString) return "";
-  return new Date(dateString).toLocaleString("zh-TW");
+  const d = new Date(dateString);
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+
+  return `${y}/${m}/${day} ${hh}:${mm}`;
 }
 
 function getExternalLabel(post: Post) {
@@ -53,7 +61,7 @@ function ShareButtons({ post }: { post: Post }) {
   const shareUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/#post-${post.id}`
-      : `#post-${post.id}`;
+      : `/#post-${post.id}`;
 
   const shareText = `${post.title}｜避坑 Be Calm`;
 
@@ -281,18 +289,18 @@ function MediaRail({
         <div className="text-[11px] text-slate-400">左右滑動查看更多 →</div>
       </div>
 
-      <div className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex gap-2">
+      <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex snap-x snap-mandatory gap-3 px-1">
           {mediaList.map((media, index) => (
             <div
               key={`${media.url}-${index}`}
-              className="relative w-[48%] min-w-[48%] overflow-hidden rounded-[18px] sm:w-[240px] sm:min-w-[240px]"
+              className="relative w-[82%] shrink-0 snap-center overflow-hidden rounded-[20px] sm:w-[240px]"
             >
               {media.type === "image" ? (
                 <img
                   src={media.url}
                   alt={`${post.title}-${index}`}
-                  className="h-44 w-full cursor-zoom-in object-cover"
+                  className="h-48 w-full cursor-zoom-in object-cover"
                   onClick={() => onOpenMedia(mediaList, index)}
                 />
               ) : (
@@ -302,7 +310,7 @@ function MediaRail({
                     controls
                     playsInline
                     preload="metadata"
-                    className="h-44 w-full bg-black object-cover"
+                    className="h-48 w-full bg-black object-cover"
                   />
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
                     VIDEO
@@ -354,6 +362,63 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const searchedPosts = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return posts;
+
+    return posts.filter((post) => {
+      return (
+        post.title?.toLowerCase().includes(q) ||
+        post.content?.toLowerCase().includes(q) ||
+        post.location?.toLowerCase().includes(q) ||
+        post.place_name?.toLowerCase().includes(q) ||
+        post.category?.toLowerCase().includes(q)
+      );
+    });
+  }, [posts, query]);
+
+  const savedPosts = useMemo(() => {
+    return posts.filter((post) => savedIds.includes(post.id));
+  }, [posts, savedIds]);
+
+  const sourcePosts =
+    activeTab === "saved"
+      ? savedPosts
+      : activeTab === "search"
+      ? searchedPosts
+      : posts;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const hash = window.location.hash;
+    if (!hash.startsWith("#post-")) return;
+
+    const id = Number(hash.replace("#post-", ""));
+    if (!id) return;
+
+    const index = sourcePosts.findIndex((post) => post.id === id);
+    if (index >= 0) {
+      setVisibleCount((prev) => Math.max(prev, index + 1));
+    }
+  }, [sourcePosts]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const hash = window.location.hash;
+    if (!hash.startsWith("#post-")) return;
+
+    const timer = setTimeout(() => {
+      const el = document.querySelector(hash);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [visibleCount, sourcePosts]);
+
   function toggleSave(postId: number) {
     const next = savedIds.includes(postId)
       ? savedIds.filter((id) => id !== postId)
@@ -385,32 +450,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       prev === lightboxMedia.length - 1 ? 0 : prev + 1
     );
   }
-
-  const searchedPosts = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return posts;
-
-    return posts.filter((post) => {
-      return (
-        post.title?.toLowerCase().includes(q) ||
-        post.content?.toLowerCase().includes(q) ||
-        post.location?.toLowerCase().includes(q) ||
-        post.place_name?.toLowerCase().includes(q) ||
-        post.category?.toLowerCase().includes(q)
-      );
-    });
-  }, [posts, query]);
-
-  const savedPosts = useMemo(() => {
-    return posts.filter((post) => savedIds.includes(post.id));
-  }, [posts, savedIds]);
-
-  const sourcePosts =
-    activeTab === "saved"
-      ? savedPosts
-      : activeTab === "search"
-      ? searchedPosts
-      : posts;
 
   const displayPosts = sourcePosts.slice(0, visibleCount);
 
@@ -464,7 +503,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         </div>
 
                         <div className="text-xs text-slate-500">
-                          {formatDate(post.created_at)}
+                          發布時間：{formatDateTime(post.created_at)}
                         </div>
                       </div>
                     </div>
