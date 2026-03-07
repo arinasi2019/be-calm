@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PostFeed from "./components/PostFeed";
 
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+};
+
 type Post = {
   id: number;
   title: string;
@@ -18,6 +23,7 @@ type Post = {
   place_name?: string | null;
   google_maps_url?: string | null;
   external_url?: string | null;
+  media_urls?: MediaItem[] | null;
 };
 
 type Vote = {
@@ -277,7 +283,6 @@ export default function HomePage() {
           </p>
         </section>
 
-        {/* 類別篩選 */}
         <section className="mb-3">
           <div className="mb-2 text-xs font-semibold text-slate-500">類別</div>
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -297,7 +302,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 國家篩選 */}
         <section className="mb-3">
           <div className="mb-2 text-xs font-semibold text-slate-500">國家</div>
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -320,7 +324,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* 城市篩選 */}
         <section className="mb-6">
           <div className="mb-2 text-xs font-semibold text-slate-500">城市</div>
           <div className="flex gap-2 overflow-x-auto pb-2">
@@ -356,7 +359,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 手機 */}
           <div className="md:hidden">
             <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex snap-x snap-mandatory gap-3 px-1">
@@ -406,7 +408,6 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 桌機 */}
           <div className="hidden gap-4 md:grid md:grid-cols-2">
             <RankingBlock
               title="🔥 全站最坑"

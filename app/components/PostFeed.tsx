@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import PostActions from "./PostActions";
 import BottomNav from "./BottomNav";
 
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+};
+
 type Post = {
   id: number;
   title: string;
@@ -16,6 +21,7 @@ type Post = {
   place_name?: string | null;
   google_maps_url?: string | null;
   external_url?: string | null;
+  media_urls?: MediaItem[] | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -30,6 +36,104 @@ function getExternalLabel(post: Post) {
   if (post.category === "旅遊") return "🗺 相關資訊";
   if (post.category === "服務") return "🔗 官方網站";
   return "🔗 相關連結";
+}
+
+function getMediaList(post: Post): MediaItem[] {
+  if (post.media_urls && Array.isArray(post.media_urls) && post.media_urls.length > 0) {
+    return post.media_urls;
+  }
+
+  const fallback: MediaItem[] = [];
+
+  if (post.image_url) {
+    fallback.push({ type: "image", url: post.image_url });
+  }
+
+  if (post.video_url) {
+    fallback.push({ type: "video", url: post.video_url });
+  }
+
+  return fallback;
+}
+
+function MediaGrid({ post }: { post: Post }) {
+  const mediaList = getMediaList(post);
+
+  if (mediaList.length === 0) return null;
+
+  if (mediaList.length === 1) {
+    const media = mediaList[0];
+
+    return (
+      <div className="px-5 pt-2">
+        <div className="overflow-hidden rounded-[22px]">
+          {media.type === "image" ? (
+            <img
+              src={media.url}
+              alt={post.title}
+              className="h-56 w-full object-cover"
+            />
+          ) : (
+            <video
+              src={media.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="h-56 w-full bg-black object-cover"
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const previewList = mediaList.slice(0, 4);
+  const hasMore = mediaList.length > 4;
+
+  return (
+    <div className="px-5 pt-2">
+      <div className="grid grid-cols-2 gap-2">
+        {previewList.map((media, index) => {
+          const isLast = index === 3 && hasMore;
+
+          return (
+            <div
+              key={`${media.url}-${index}`}
+              className="relative overflow-hidden rounded-[18px]"
+            >
+              {media.type === "image" ? (
+                <img
+                  src={media.url}
+                  alt={`${post.title}-${index}`}
+                  className="h-40 w-full object-cover"
+                />
+              ) : (
+                <video
+                  src={media.url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="h-40 w-full bg-black object-cover"
+                />
+              )}
+
+              {isLast && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-black text-white">
+                  +{mediaList.length - 4}
+                </div>
+              )}
+
+              {media.type === "video" && !isLast && (
+                <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
+                  VIDEO
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function PostFeed({ posts }: { posts: Post[] }) {
@@ -149,23 +253,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   </button>
                 </div>
 
-                {post.image_url && (
-                  <img
-                    src={post.image_url}
-                    alt={post.title}
-                    className="w-full object-cover"
-                  />
-                )}
-
-                {post.video_url && (
-                  <video
-                    src={post.video_url}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    className="w-full bg-black"
-                  />
-                )}
+                <MediaGrid post={post} />
 
                 <div className="px-5 py-5">
                   <div className="mb-3 flex flex-wrap gap-2">

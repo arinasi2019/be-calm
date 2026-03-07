@@ -16,6 +16,11 @@ const COUNTRY_OPTIONS = [
   "其他",
 ];
 
+type MediaItem = {
+  type: "image" | "video";
+  url: string;
+};
+
 export default function WritePage() {
   const router = useRouter();
 
@@ -28,8 +33,8 @@ export default function WritePage() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
   const [content, setContent] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [videoFiles, setVideoFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -40,10 +45,26 @@ export default function WritePage() {
       .slice(2)}.${fileExt}`;
 
     const { error } = await supabase.storage.from("media").upload(fileName, file);
+
     if (error) throw error;
 
     const { data } = supabase.storage.from("media").getPublicUrl(fileName);
     return data.publicUrl;
+  }
+
+  async function uploadMultipleFiles(
+    files: File[],
+    folder: string,
+    type: "image" | "video"
+  ): Promise<MediaItem[]> {
+    const uploaded: MediaItem[] = [];
+
+    for (const file of files) {
+      const url = await uploadFile(file, folder);
+      uploaded.push({ type, url });
+    }
+
+    return uploaded;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -52,16 +73,31 @@ export default function WritePage() {
     setSubmitted(false);
 
     try {
-      let imageUrl: string | null = null;
-      let videoUrl: string | null = null;
+      let mediaItems: MediaItem[] = [];
 
-      if (imageFile) {
-        imageUrl = await uploadFile(imageFile, "images");
+      if (imageFiles.length > 0) {
+        const uploadedImages = await uploadMultipleFiles(
+          imageFiles,
+          "images",
+          "image"
+        );
+        mediaItems = [...mediaItems, ...uploadedImages];
       }
 
-      if (videoFile) {
-        videoUrl = await uploadFile(videoFile, "videos");
+      if (videoFiles.length > 0) {
+        const uploadedVideos = await uploadMultipleFiles(
+          videoFiles,
+          "videos",
+          "video"
+        );
+        mediaItems = [...mediaItems, ...uploadedVideos];
       }
+
+      // 為了相容你目前首頁可能還在用 image_url / video_url
+      const firstImage =
+        mediaItems.find((item) => item.type === "image")?.url || null;
+      const firstVideo =
+        mediaItems.find((item) => item.type === "video")?.url || null;
 
       const { error } = await supabase.from("posts").insert([
         {
@@ -74,8 +110,9 @@ export default function WritePage() {
           google_maps_url: googleMapsUrl || null,
           external_url: externalUrl || null,
           content,
-          image_url: imageUrl,
-          video_url: videoUrl,
+          image_url: firstImage,
+          video_url: firstVideo,
+          media_urls: mediaItems,
         },
       ]);
 
@@ -95,8 +132,8 @@ export default function WritePage() {
       setGoogleMapsUrl("");
       setExternalUrl("");
       setContent("");
-      setImageFile(null);
-      setVideoFile(null);
+      setImageFiles([]);
+      setVideoFiles([]);
       setLoading(false);
 
       setTimeout(() => {
@@ -208,7 +245,9 @@ export default function WritePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">Google Maps 連結（有店家再填）</label>
+              <label className="mb-2 block text-sm font-medium">
+                Google Maps 連結（有店家再填）
+              </label>
               <input
                 type="url"
                 value={googleMapsUrl}
@@ -219,7 +258,9 @@ export default function WritePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">外部連結（商品 / 官網 / 景點）</label>
+              <label className="mb-2 block text-sm font-medium">
+                外部連結（商品 / 官網 / 景點）
+              </label>
               <input
                 type="url"
                 value={externalUrl}
@@ -242,23 +283,35 @@ export default function WritePage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">照片</label>
+              <label className="mb-2 block text-sm font-medium">照片（可多選）</label>
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => setImageFiles(Array.from(e.target.files || []))}
                 className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
+              {imageFiles.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  已選擇 {imageFiles.length} 張照片
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium">影片</label>
+              <label className="mb-2 block text-sm font-medium">影片（可多選）</label>
               <input
                 type="file"
                 accept="video/*"
-                onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => setVideoFiles(Array.from(e.target.files || []))}
                 className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
+              {videoFiles.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  已選擇 {videoFiles.length} 支影片
+                </p>
+              )}
             </div>
 
             <button
