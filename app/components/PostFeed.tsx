@@ -56,7 +56,155 @@ function getMediaList(post: Post): MediaItem[] {
   return fallback;
 }
 
-function MediaGrid({ post }: { post: Post }) {
+function Lightbox({
+  mediaList,
+  currentIndex,
+  onClose,
+  onPrev,
+  onNext,
+  onJump,
+}: {
+  mediaList: MediaItem[];
+  currentIndex: number;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onJump: (index: number) => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") onPrev();
+      if (e.key === "ArrowRight") onNext();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [onClose, onPrev, onNext]);
+
+  if (!mediaList.length) return null;
+
+  const current = mediaList[currentIndex];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/90"
+      onClick={onClose}
+    >
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        className="absolute right-4 top-4 z-10 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold text-white backdrop-blur"
+      >
+        關閉
+      </button>
+
+      {mediaList.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
+          className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
+        >
+          ←
+        </button>
+      )}
+
+      {mediaList.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
+        >
+          →
+        </button>
+      )}
+
+      <div
+        className="flex h-full flex-col items-center justify-center px-4 pb-6 pt-16"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex min-h-0 w-full max-w-5xl flex-1 items-center justify-center">
+          {current.type === "image" ? (
+            <img
+              src={current.url}
+              alt={`preview-${currentIndex}`}
+              className="max-h-[72vh] max-w-full rounded-2xl object-contain"
+            />
+          ) : (
+            <video
+              src={current.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-[72vh] max-w-full rounded-2xl bg-black object-contain"
+            />
+          )}
+        </div>
+
+        {mediaList.length > 1 && (
+          <>
+            <div className="mt-3 text-center text-sm text-white/80">
+              {currentIndex + 1} / {mediaList.length}
+            </div>
+
+            <div className="mt-4 w-full max-w-4xl overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-2">
+                {mediaList.map((media, index) => (
+                  <button
+                    key={`${media.url}-${index}`}
+                    onClick={() => onJump(index)}
+                    className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${
+                      currentIndex === index
+                        ? "border-white"
+                        : "border-white/20"
+                    }`}
+                  >
+                    {media.type === "image" ? (
+                      <img
+                        src={media.url}
+                        alt={`thumb-${index}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <>
+                        <video
+                          src={media.url}
+                          className="h-full w-full bg-black object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/35 text-[10px] font-bold text-white">
+                          VIDEO
+                        </div>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MediaRail({
+  post,
+  onOpenMedia,
+}: {
+  post: Post;
+  onOpenMedia: (mediaList: MediaItem[], index: number) => void;
+}) {
   const mediaList = getMediaList(post);
 
   if (mediaList.length === 0) return null;
@@ -71,7 +219,8 @@ function MediaGrid({ post }: { post: Post }) {
             <img
               src={media.url}
               alt={post.title}
-              className="h-56 w-full object-cover"
+              className="h-56 w-full cursor-zoom-in object-cover"
+              onClick={() => onOpenMedia(mediaList, 0)}
             />
           ) : (
             <video
@@ -87,16 +236,11 @@ function MediaGrid({ post }: { post: Post }) {
     );
   }
 
-  const previewList = mediaList.slice(0, 4);
-  const hasMore = mediaList.length > 4;
-
   return (
     <div className="px-5 pt-2">
-      <div className="grid grid-cols-2 gap-2">
-        {previewList.map((media, index) => {
-          const isLast = index === 3 && hasMore;
-
-          return (
+      <div className="overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid auto-cols-[calc(50%-0.25rem)] grid-flow-col gap-2">
+          {mediaList.map((media, index) => (
             <div
               key={`${media.url}-${index}`}
               className="relative overflow-hidden rounded-[18px]"
@@ -105,32 +249,32 @@ function MediaGrid({ post }: { post: Post }) {
                 <img
                   src={media.url}
                   alt={`${post.title}-${index}`}
-                  className="h-40 w-full object-cover"
+                  className="h-44 w-full cursor-zoom-in object-cover"
+                  onClick={() => onOpenMedia(mediaList, index)}
                 />
               ) : (
-                <video
-                  src={media.url}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="h-40 w-full bg-black object-cover"
-                />
+                <>
+                  <video
+                    src={media.url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-44 w-full bg-black object-cover"
+                  />
+                  <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
+                    VIDEO
+                  </div>
+                </>
               )}
 
-              {isLast && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-black text-white">
-                  +{mediaList.length - 4}
-                </div>
-              )}
-
-              {media.type === "video" && !isLast && (
-                <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
-                  VIDEO
+              {index === 1 && mediaList.length > 2 && (
+                <div className="pointer-events-none absolute left-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-semibold text-white">
+                  還有 {mediaList.length - 2} 項 →
                 </div>
               )}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -140,6 +284,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
   const [savedIds, setSavedIds] = useState<number[]>([]);
+  const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     const raw = localStorage.getItem("be-calm-saved-posts");
@@ -159,6 +305,29 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
     setSavedIds(next);
     localStorage.setItem("be-calm-saved-posts", JSON.stringify(next));
+  }
+
+  function openLightbox(mediaList: MediaItem[], index: number) {
+    if (!mediaList.length) return;
+    setLightboxMedia(mediaList);
+    setLightboxIndex(index);
+  }
+
+  function closeLightbox() {
+    setLightboxMedia([]);
+    setLightboxIndex(0);
+  }
+
+  function showPrevMedia() {
+    setLightboxIndex((prev) =>
+      prev === 0 ? lightboxMedia.length - 1 : prev - 1
+    );
+  }
+
+  function showNextMedia() {
+    setLightboxIndex((prev) =>
+      prev === lightboxMedia.length - 1 ? 0 : prev + 1
+    );
   }
 
   const searchedPosts = useMemo(() => {
@@ -253,7 +422,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   </button>
                 </div>
 
-                <MediaGrid post={post} />
+                <MediaRail post={post} onOpenMedia={openLightbox} />
 
                 <div className="px-5 py-5">
                   <div className="mb-3 flex flex-wrap gap-2">
@@ -307,6 +476,17 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       </section>
 
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+
+      {lightboxMedia.length > 0 && (
+        <Lightbox
+          mediaList={lightboxMedia}
+          currentIndex={lightboxIndex}
+          onClose={closeLightbox}
+          onPrev={showPrevMedia}
+          onNext={showNextMedia}
+          onJump={setLightboxIndex}
+        />
+      )}
     </>
   );
 }
