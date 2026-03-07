@@ -9,6 +9,8 @@ type MediaItem = {
   url: string;
 };
 
+type RiskLevel = "低" | "中" | "高";
+
 type Post = {
   id: number;
   title: string;
@@ -24,6 +26,9 @@ type Post = {
   google_maps_url?: string | null;
   external_url?: string | null;
   media_urls?: MediaItem[] | null;
+  incident_type?: string | null;
+  risk_level?: RiskLevel | null;
+  content_type?: "normal" | "incident" | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -66,18 +71,53 @@ function getExternalLabel(post: Post) {
   if (post.category === "商品") return "🛒 商品連結";
   if (post.category === "旅遊") return "🗺 相關資訊";
   if (post.category === "服務") return "🔗 官方網站";
+  if (post.category === "人物/事件") return "⚠ 事件資訊";
   return "🔗 相關連結";
 }
 
 function getMediaList(post: Post): MediaItem[] {
   if (post.media_urls && Array.isArray(post.media_urls) && post.media_urls.length > 0) {
-    return post.media_urls;
+    return [...post.media_urls].sort((a, b) => {
+      if (a.type === "video" && b.type !== "video") return -1;
+      if (a.type !== "video" && b.type === "video") return 1;
+      return 0;
+    });
   }
 
   const fallback: MediaItem[] = [];
-  if (post.image_url) fallback.push({ type: "image", url: post.image_url });
-  if (post.video_url) fallback.push({ type: "video", url: post.video_url });
+
+  if (post.video_url) {
+    fallback.push({ type: "video", url: post.video_url });
+  }
+
+  if (post.image_url) {
+    fallback.push({ type: "image", url: post.image_url });
+  }
+
   return fallback;
+}
+
+function getRiskBadgeClass(riskLevel?: RiskLevel | null) {
+  if (riskLevel === "高") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (riskLevel === "中") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (riskLevel === "低") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function getCategoryBadge(post: Post) {
+  if (post.category === "人物/事件") {
+    return (
+      <span className="rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white">
+        ⚠ 人物 / 事件
+      </span>
+    );
+  }
+
+  return (
+    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+      {post.category}
+    </span>
+  );
 }
 
 function ShareButtons({ post }: { post: Post }) {
@@ -306,9 +346,7 @@ function MediaRail({
   return (
     <div className="px-5 pt-2">
       <div className="mb-2 flex items-center justify-between px-1">
-        <div className="text-xs font-medium text-slate-500">
-          共 {mediaList.length} 項媒體
-        </div>
+        <div className="text-xs font-medium text-slate-500">共 {mediaList.length} 項媒體</div>
         <div className="text-[11px] text-slate-400">左右滑動查看更多 →</div>
       </div>
 
@@ -378,10 +416,7 @@ function SearchModal({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/35 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 bg-black/35 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         className="mx-auto mt-16 max-w-2xl rounded-[28px] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -393,7 +428,7 @@ function SearchModal({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜尋店家、商品、地點、標題、內容..."
+              placeholder="搜尋店家、商品、地點、標題、內容、事件類型..."
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
             />
 
@@ -408,13 +443,9 @@ function SearchModal({
 
         <div className="max-h-[65vh] overflow-y-auto p-4">
           {query.trim() === "" ? (
-            <div className="py-10 text-center text-sm text-slate-400">
-              輸入關鍵字開始搜尋
-            </div>
+            <div className="py-10 text-center text-sm text-slate-400">輸入關鍵字開始搜尋</div>
           ) : results.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-400">
-              找不到符合的內容
-            </div>
+            <div className="py-10 text-center text-sm text-slate-400">找不到符合的內容</div>
           ) : (
             <div className="space-y-3">
               {results.map((post) => (
@@ -424,15 +455,22 @@ function SearchModal({
                   onClick={onClose}
                   className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
                 >
-                  <div className="text-sm font-bold text-slate-900">
-                    {post.title}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-bold text-slate-900">{post.title}</div>
+
+                    {post.category === "人物/事件" && (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                        人物 / 事件
+                      </span>
+                    )}
                   </div>
+
                   <div className="mt-1 text-xs text-slate-500">
                     {post.place_name || post.location || post.category}
+                    {post.incident_type ? ` · ${post.incident_type}` : ""}
                   </div>
-                  <div className="mt-2 line-clamp-2 text-sm text-slate-600">
-                    {post.content}
-                  </div>
+
+                  <div className="mt-2 line-clamp-2 text-sm text-slate-600">{post.content}</div>
                 </a>
               ))}
             </div>
@@ -473,14 +511,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       ticking = true;
 
       requestAnimationFrame(() => {
-        const nearBottom =
-          window.innerHeight + window.scrollY >=
-          document.body.offsetHeight - 800;
-
-        if (nearBottom) {
-          setVisibleCount((prev) => prev + 4);
-        }
-
+        const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 800;
+        if (nearBottom) setVisibleCount((prev) => prev + 4);
         ticking = false;
       });
     }
@@ -501,14 +533,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         (post.place_name || "").toLowerCase().includes(q) ||
         post.category?.toLowerCase().includes(q) ||
         (post.country || "").toLowerCase().includes(q) ||
-        (post.city || "").toLowerCase().includes(q)
+        (post.city || "").toLowerCase().includes(q) ||
+        (post.incident_type || "").toLowerCase().includes(q)
       );
     });
   }, [posts, query]);
 
-  const savedPosts = useMemo(() => {
-    return posts.filter((post) => savedIds.includes(post.id));
-  }, [posts, savedIds]);
+  const savedPosts = useMemo(() => posts.filter((post) => savedIds.includes(post.id)), [posts, savedIds]);
 
   const sourcePosts = activeTab === "saved" ? savedPosts : posts;
 
@@ -575,15 +606,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   }
 
   function showPrevMedia() {
-    setLightboxIndex((prev) =>
-      prev === 0 ? lightboxMedia.length - 1 : prev - 1
-    );
+    setLightboxIndex((prev) => (prev === 0 ? lightboxMedia.length - 1 : prev - 1));
   }
 
   function showNextMedia() {
-    setLightboxIndex((prev) =>
-      prev === lightboxMedia.length - 1 ? 0 : prev + 1
-    );
+    setLightboxIndex((prev) => (prev === lightboxMedia.length - 1 ? 0 : prev + 1));
   }
 
   const displayPosts = sourcePosts.slice(0, visibleCount);
@@ -593,46 +620,51 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       <section className="mb-24 space-y-5">
         {displayPosts.length === 0 ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
-            {activeTab === "saved"
-              ? "你目前還沒有收藏貼文"
-              : "目前還沒有貼文，來發第一篇吧。"}
+            {activeTab === "saved" ? "你目前還沒有收藏貼文" : "目前還沒有貼文，來發第一篇吧。"}
           </div>
         ) : (
           <>
             {displayPosts.map((post, index) => {
               const isSaved = savedIds.includes(post.id);
+              const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
 
               return (
                 <article
                   id={`post-${post.id}`}
                   key={post.id}
-                  className={`scroll-mt-28 overflow-hidden rounded-[28px] border border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                    index % 2 === 0 ? "bg-white" : "bg-slate-50"
+                  className={`scroll-mt-28 overflow-hidden rounded-[28px] border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    isIncidentPost
+                      ? "border-rose-200 bg-rose-50/30"
+                      : index % 2 === 0
+                      ? "border-slate-200 bg-white"
+                      : "border-slate-200 bg-slate-50"
                   }`}
                 >
                   <div className="flex items-start justify-between px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500 text-sm font-bold text-white">
-                        坑
+                      <div
+                        className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ${
+                          isIncidentPost
+                            ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
+                            : "bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500"
+                        }`}
+                      >
+                        {isIncidentPost ? "警" : "坑"}
                       </div>
 
                       <div>
                         <div className="text-[15px] font-semibold text-slate-900">
-                          {post.place_name || post.location || "匿名避坑人"}
+                          {post.place_name || post.location || (isIncidentPost ? "匿名事件分享" : "匿名避坑人")}
                         </div>
 
-                        <div className="mt-1 text-xs text-slate-500">
-                          發布時間：{formatDateTime(post.created_at)}
-                        </div>
+                        <div className="mt-1 text-xs text-slate-500">發布時間：{formatDateTime(post.created_at)}</div>
                       </div>
                     </div>
 
                     <button
                       onClick={() => toggleSave(post.id)}
                       className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                        isSaved
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-slate-100 text-slate-600"
+                        isSaved ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
                       }`}
                     >
                       {isSaved ? "已收藏" : "收藏"}
@@ -643,9 +675,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                   <div className="px-5 py-5">
                     <div className="mb-3 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
-                        {post.category}
-                      </span>
+                      {getCategoryBadge(post)}
 
                       {formatLocation(post) && (
                         <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
@@ -669,23 +699,42 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                           href={post.external_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                          className={`rounded-full px-3 py-1 text-xs font-medium ${
+                            isIncidentPost
+                              ? "border border-rose-200 bg-rose-50 text-rose-700"
+                              : "border border-sky-200 bg-sky-50 text-sky-700"
+                          }`}
                         >
                           {getExternalLabel(post)}
                         </a>
                       )}
                     </div>
 
-                    <h2 className="text-2xl font-black text-slate-900">
-                      {post.title}
-                    </h2>
+                    {isIncidentPost && (post.incident_type || post.risk_level) && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {post.incident_type && (
+                          <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                            類型：{post.incident_type}
+                          </span>
+                        )}
 
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                      {post.content}
-                    </p>
+                        {post.risk_level && (
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-medium ${getRiskBadgeClass(
+                              post.risk_level
+                            )}`}
+                          >
+                            風險：{post.risk_level}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <h2 className="text-2xl font-black text-slate-900">{post.title}</h2>
+
+                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{post.content}</p>
 
                     <ShareButtons post={post} />
-
                     <PostActions postId={post.id} />
                   </div>
                 </article>
@@ -693,9 +742,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
             })}
 
             {displayPosts.length < sourcePosts.length && (
-              <div className="text-center text-sm text-slate-500">
-                往下滑可載入更多內容
-              </div>
+              <div className="text-center text-sm text-slate-500">往下滑可載入更多內容</div>
             )}
           </>
         )}

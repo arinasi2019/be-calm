@@ -9,6 +9,8 @@ type MediaItem = {
   url: string;
 };
 
+type RiskLevel = "低" | "中" | "高";
+
 type Post = {
   id: number;
   title: string;
@@ -24,6 +26,9 @@ type Post = {
   google_maps_url?: string | null;
   external_url?: string | null;
   media_urls?: MediaItem[] | null;
+  incident_type?: string | null;
+  risk_level?: RiskLevel | null;
+  content_type?: "normal" | "incident" | null;
 };
 
 type Vote = {
@@ -88,12 +93,21 @@ function RankingBlock({
               href={`#post-${post.id}`}
               className="block rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100"
             >
-              <div className="text-sm font-bold text-slate-900">
-                #{index + 1} {post.title}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-bold text-slate-900">
+                  #{index + 1} {post.title}
+                </div>
+
+                {post.category === "人物/事件" && (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                    人物 / 事件
+                  </span>
+                )}
               </div>
 
               <div className="mt-1 text-xs text-slate-500">
                 {[post.category, post.country, post.city].filter(Boolean).join("・")}
+                {post.incident_type ? `・${post.incident_type}` : ""}
               </div>
 
               <div className="mt-2 flex flex-wrap gap-2">
@@ -112,6 +126,12 @@ function RankingBlock({
                 {metricLabel === "熱度" && (
                   <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
                     熱度 {post.trendScore.toFixed(1)}
+                  </span>
+                )}
+
+                {post.category === "人物/事件" && post.risk_level && (
+                  <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+                    風險 {post.risk_level}
                   </span>
                 )}
               </div>
@@ -164,12 +184,10 @@ export default function HomePage() {
     load();
   }, []);
 
-  const categories = ["全部", "店家", "商品", "旅遊", "服務"];
+  const categories = ["全部", "店家", "商品", "旅遊", "服務", "人物/事件"];
 
   const countries = useMemo(() => {
-    const items = Array.from(
-      new Set(posts.map((p) => p.country).filter(Boolean))
-    ) as string[];
+    const items = Array.from(new Set(posts.map((p) => p.country).filter(Boolean))) as string[];
     return ["全部", ...items];
   }, [posts]);
 
@@ -179,9 +197,7 @@ export default function HomePage() {
       return p.country === selectedCountry;
     });
 
-    const items = Array.from(
-      new Set(filtered.map((p) => p.city).filter(Boolean))
-    ) as string[];
+    const items = Array.from(new Set(filtered.map((p) => p.city).filter(Boolean))) as string[];
 
     return ["全部", ...items];
   }, [posts, selectedCountry]);
@@ -205,12 +221,8 @@ export default function HomePage() {
 
   const filteredPosts = useMemo(() => {
     return postsWithStats.filter((post) => {
-      const matchCategory =
-        selectedCategory === "全部" || post.category === selectedCategory;
-
-      const matchCountry =
-        selectedCountry === "全部" || post.country === selectedCountry;
-
+      const matchCategory = selectedCategory === "全部" || post.category === selectedCategory;
+      const matchCountry = selectedCountry === "全部" || post.country === selectedCountry;
       const matchCity = selectedCity === "全部" || post.city === selectedCity;
 
       return matchCategory && matchCountry && matchCity;
@@ -250,9 +262,7 @@ export default function HomePage() {
               />
 
               <div className="min-w-0">
-                <div className="truncate text-lg font-black text-slate-900">
-                  避坑 Be Calm
-                </div>
+                <div className="truncate text-lg font-black text-slate-900">避坑 Be Calm</div>
                 <div className="text-xs text-slate-500">不種草，只避雷</div>
               </div>
             </div>
@@ -278,7 +288,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
-            分享真實踩雷、避坑心得、雷店、雷商品、雷服務。
+            分享真實踩雷、避坑心得、雷店、雷商品、雷服務，也可以分享人物 / 事件警示。
             在花錢前，先看大家踩過哪些坑。
           </p>
         </section>
@@ -363,39 +373,19 @@ export default function HomePage() {
             <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex snap-x snap-mandatory gap-3 px-1">
                 <div className="min-w-[84%] snap-center">
-                  <RankingBlock
-                    title="🔥 全站最坑"
-                    colorClass="text-rose-600"
-                    posts={allTimeHot}
-                    metricLabel="坑"
-                  />
+                  <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
                 </div>
 
                 <div className="min-w-[84%] snap-center">
-                  <RankingBlock
-                    title="🆕 最新踩雷"
-                    colorClass="text-slate-900"
-                    posts={latestPosts}
-                    metricLabel="坑"
-                  />
+                  <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
                 </div>
 
                 <div className="min-w-[84%] snap-center">
-                  <RankingBlock
-                    title="💬 討論最多"
-                    colorClass="text-sky-600"
-                    posts={mostDiscussed}
-                    metricLabel="留言"
-                  />
+                  <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
                 </div>
 
                 <div className="min-w-[84%] snap-center">
-                  <RankingBlock
-                    title="⚡ 最近爆雷"
-                    colorClass="text-amber-600"
-                    posts={trending}
-                    metricLabel="熱度"
-                  />
+                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
                 </div>
               </div>
             </div>
@@ -409,33 +399,10 @@ export default function HomePage() {
           </div>
 
           <div className="hidden gap-4 md:grid md:grid-cols-2">
-            <RankingBlock
-              title="🔥 全站最坑"
-              colorClass="text-rose-600"
-              posts={allTimeHot}
-              metricLabel="坑"
-            />
-
-            <RankingBlock
-              title="🆕 最新踩雷"
-              colorClass="text-slate-900"
-              posts={latestPosts}
-              metricLabel="坑"
-            />
-
-            <RankingBlock
-              title="💬 討論最多"
-              colorClass="text-sky-600"
-              posts={mostDiscussed}
-              metricLabel="留言"
-            />
-
-            <RankingBlock
-              title="⚡ 最近爆雷"
-              colorClass="text-amber-600"
-              posts={trending}
-              metricLabel="熱度"
-            />
+            <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
+            <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
+            <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
+            <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
           </div>
         </section>
 
