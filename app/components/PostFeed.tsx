@@ -144,28 +144,12 @@ function ShareButtons({ post }: { post: Post }) {
   }
 
   return (
-    <div className="mt-4">
-      <button
-        onClick={handleShare}
-        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-4 w-4"
-        >
-          <path d="M12 16V4" />
-          <path d="M8 8l4-4 4 4" />
-          <path d="M20 16.5v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2" />
-        </svg>
-        分享
-      </button>
-    </div>
+    <button
+      onClick={handleShare}
+      className="text-sm font-medium text-slate-500 hover:text-slate-900"
+    >
+      分享
+    </button>
   );
 }
 
@@ -320,13 +304,13 @@ function MediaRail({
     const media = mediaList[0];
 
     return (
-      <div className="px-5 pt-2">
-        <div className="mx-auto max-w-[520px] overflow-hidden rounded-[22px]">
+      <div className="pt-2">
+        <div className="overflow-hidden rounded-[22px]">
           {media.type === "image" ? (
             <img
               src={media.url}
               alt={post.title}
-              className="h-64 w-full cursor-zoom-in object-cover"
+              className="h-72 w-full cursor-zoom-in object-cover"
               onClick={() => onOpenMedia(mediaList, 0)}
             />
           ) : (
@@ -335,7 +319,7 @@ function MediaRail({
               controls
               playsInline
               preload="metadata"
-              className="h-64 w-full bg-black object-cover"
+              className="h-72 w-full bg-black object-cover"
             />
           )}
         </div>
@@ -344,7 +328,7 @@ function MediaRail({
   }
 
   return (
-    <div className="px-5 pt-2">
+    <div className="pt-2">
       <div className="mb-2 flex items-center justify-between px-1">
         <div className="text-xs font-medium text-slate-500">共 {mediaList.length} 項媒體</div>
         <div className="text-[11px] text-slate-400">左右滑動查看更多 →</div>
@@ -355,13 +339,13 @@ function MediaRail({
           {mediaList.map((media, index) => (
             <div
               key={`${media.url}-${index}`}
-              className="relative w-[82%] shrink-0 snap-center overflow-hidden rounded-[20px] sm:w-[240px]"
+              className="relative w-[85%] shrink-0 snap-center overflow-hidden rounded-[20px] sm:w-[320px]"
             >
               {media.type === "image" ? (
                 <img
                   src={media.url}
                   alt={`${post.title}-${index}`}
-                  className="h-48 w-full cursor-zoom-in object-cover"
+                  className="h-64 w-full cursor-zoom-in object-cover"
                   onClick={() => onOpenMedia(mediaList, index)}
                 />
               ) : (
@@ -371,7 +355,7 @@ function MediaRail({
                     controls
                     playsInline
                     preload="metadata"
-                    className="h-48 w-full bg-black object-cover"
+                    className="h-64 w-full bg-black object-cover"
                   />
                   <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
                     VIDEO
@@ -631,7 +615,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
           </div>
         ) : (
           <>
-            {displayPosts.map((post, index) => {
+            {displayPosts.map((post) => {
               const isSaved = savedIds.includes(post.id);
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
               const isExpanded = expandedPostIds.includes(post.id);
@@ -641,38 +625,35 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                 <article
                   id={`post-${post.id}`}
                   key={post.id}
-                  className={`scroll-mt-28 overflow-hidden rounded-[28px] border shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                    isIncidentPost
-                      ? "border-rose-200 bg-rose-50/30"
-                      : index % 2 === 0
-                      ? "border-slate-200 bg-white"
-                      : "border-slate-200 bg-slate-50"
+                  className={`rounded-[28px] border bg-white p-5 shadow-sm transition hover:shadow-md ${
+                    isIncidentPost ? "border-rose-200" : "border-slate-200"
                   }`}
                 >
-                  <div className="flex items-start justify-between px-5 py-4">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div
-                        className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white ${
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
                           isIncidentPost
                             ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
-                            : "bg-gradient-to-br from-rose-400 via-orange-400 to-fuchsia-500"
+                            : "bg-gradient-to-br from-slate-900 to-slate-700"
                         }`}
                       >
                         {isIncidentPost ? "警" : "坑"}
                       </div>
 
-                      <div>
-                        <div className="text-[15px] font-semibold text-slate-900">
+                      <div className="min-w-0">
+                        <div className="truncate text-[15px] font-semibold text-slate-900">
                           {post.place_name || post.location || (isIncidentPost ? "匿名事件分享" : "匿名避坑人")}
                         </div>
-
-                        <div className="mt-1 text-xs text-slate-500">發布時間：{formatDateTime(post.created_at)}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {formatDateTime(post.created_at)}
+                        </div>
                       </div>
                     </div>
 
                     <button
                       onClick={() => toggleSave(post.id)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${
                         isSaved ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
                       }`}
                     >
@@ -680,89 +661,90 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     </button>
                   </div>
 
-                  <MediaRail post={post} onOpenMedia={openLightbox} />
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {getCategoryBadge(post)}
 
-                  <div className="px-5 py-5">
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {getCategoryBadge(post)}
+                    {formatLocation(post) && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+                        {getCountryFlag(post.country)} {formatLocation(post)}
+                      </span>
+                    )}
 
-                      {formatLocation(post) && (
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-                          {getCountryFlag(post.country)} {formatLocation(post)}
+                    {post.google_maps_url && (
+                      <a
+                        href={post.google_maps_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+                      >
+                        📍 Google 店家
+                      </a>
+                    )}
+
+                    {post.external_url && (
+                      <a
+                        href={post.external_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          isIncidentPost
+                            ? "border border-rose-200 bg-rose-50 text-rose-700"
+                            : "border border-sky-200 bg-sky-50 text-sky-700"
+                        }`}
+                      >
+                        {getExternalLabel(post)}
+                      </a>
+                    )}
+                  </div>
+
+                  {isIncidentPost && (post.incident_type || post.risk_level) && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {post.incident_type && (
+                        <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
+                          類型：{post.incident_type}
                         </span>
                       )}
 
-                      {post.google_maps_url && (
-                        <a
-                          href={post.google_maps_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
+                      {post.risk_level && (
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-medium ${getRiskBadgeClass(
+                            post.risk_level
+                          )}`}
                         >
-                          📍 Google 店家
-                        </a>
-                      )}
-
-                      {post.external_url && (
-                        <a
-                          href={post.external_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            isIncidentPost
-                              ? "border border-rose-200 bg-rose-50 text-rose-700"
-                              : "border border-sky-200 bg-sky-50 text-sky-700"
-                          }`}
-                        >
-                          {getExternalLabel(post)}
-                        </a>
+                          風險：{post.risk_level}
+                        </span>
                       )}
                     </div>
+                  )}
 
-                    {isIncidentPost && (post.incident_type || post.risk_level) && (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {post.incident_type && (
-                          <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
-                            類型：{post.incident_type}
-                          </span>
-                        )}
+                  <h2 className="mt-4 text-2xl font-black text-slate-900">{post.title}</h2>
 
-                        {post.risk_level && (
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-medium ${getRiskBadgeClass(
-                              post.risk_level
-                            )}`}
-                          >
-                            風險：{post.risk_level}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                  <div className="mt-3">
+                    <p
+                      className={`whitespace-pre-wrap text-sm leading-7 text-slate-700 ${
+                        !isExpanded && shouldTruncate ? "line-clamp-4" : ""
+                      }`}
+                    >
+                      {post.content}
+                    </p>
 
-                    <h2 className="text-2xl font-black text-slate-900">{post.title}</h2>
-
-                    <div className="mt-3">
-                      <p
-                        className={`whitespace-pre-wrap text-sm leading-7 text-slate-700 ${
-                          !isExpanded && shouldTruncate ? "line-clamp-4" : ""
-                        }`}
+                    {shouldTruncate && (
+                      <button
+                        onClick={() => toggleExpand(post.id)}
+                        className="mt-2 text-sm font-medium text-slate-500 hover:text-slate-900"
                       >
-                        {post.content}
-                      </p>
-
-                      {shouldTruncate && (
-                        <button
-                          onClick={() => toggleExpand(post.id)}
-                          className="mt-2 text-sm font-medium text-slate-500 hover:text-slate-900"
-                        >
-                          {isExpanded ? "收起" : "繼續閱讀"}
-                        </button>
-                      )}
-                    </div>
-
-                    <ShareButtons post={post} />
-                    <PostActions postId={post.id} />
+                        {isExpanded ? "收起" : "繼續閱讀"}
+                      </button>
+                    )}
                   </div>
+
+                  <MediaRail post={post} onOpenMedia={openLightbox} />
+
+                  <div className="mt-4">
+                    <ShareButtons post={post} />
+                  </div>
+
+                  <PostActions postId={post.id} />
                 </article>
               );
             })}
