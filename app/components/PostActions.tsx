@@ -1,211 +1,167 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-type Comment = {
+type CommentItem = {
   id: number;
+  post_id: number;
   content: string;
-  created_at: string;
-  post_id: number;
-  nickname?: string | null;
+  created_at: string | null;
 };
 
-type Vote = {
-  id: number;
-  post_id: number;
-};
+function formatRelativeTime(dateString: string | null) {
+  if (!dateString) return "剛剛";
 
-function getAnonymousName() {
-  if (typeof window === "undefined") return "匿名用戶";
-  const saved = localStorage.getItem("be-calm-nickname");
-  if (saved) return saved;
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "剛剛";
 
-  const random = Math.floor(100 + Math.random() * 900);
-  const nickname = `匿名用戶 ${random}`;
-  localStorage.setItem("be-calm-nickname", nickname);
-  return nickname;
-}
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 1000 / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
 
-function formatCommentTime(dateString?: string) {
-  if (!dateString) return "";
-  return new Date(dateString).toLocaleString("zh-TW");
-}
+  if (diffMin < 1) return "剛剛";
+  if (diffMin < 60) return `${diffMin} 分鐘前`;
+  if (diffHour < 24) return `${diffHour} 小時前`;
+  if (diffDay < 7) return `${diffDay} 天前`;
 
-function avatarText(name?: string | null) {
-  if (!name) return "匿";
-  return name.replace("匿名用戶 ", "").slice(0, 2) || "匿";
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 export default function PostActions({ postId }: { postId: number }) {
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<CommentItem[]>([]);
   const [commentText, setCommentText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [nickname, setNickname] = useState("匿名用戶");
-  const [pitCount, setPitCount] = useState(0);
-  const [pitLoading, setPitLoading] = useState(false);
-  const [hasPitted, setHasPitted] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
-  useEffect(() => {
-    setNickname(getAnonymousName());
-    fetchComments();
-    fetchPits();
+  async function loadComments() {
+    setLoadingComments(true);
 
-    if (typeof window !== "undefined") {
-      const raw = localStorage.getItem("be-calm-pitted-posts");
-      if (raw) {
-        try {
-          const ids = JSON.parse(raw) as number[];
-          setHasPitted(ids.includes(postId));
-        } catch {
-          setHasPitted(false);
-        }
-      }
-    }
-  }, [postId]);
-
-  async function fetchComments() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("comments")
-      .select("*")
+      .select("id, post_id, content, created_at")
       .eq("post_id", postId)
-      .order("created_at", { ascending: false });
-
-    setComments(data || []);
-  }
-
-  async function fetchPits() {
-    const { data } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("post_id", postId);
-
-    setPitCount((data || []).length);
-  }
-
-  async function handlePit() {
-    if (hasPitted) return;
-
-    setPitLoading(true);
-
-    const { error } = await supabase.from("votes").insert({
-      post_id: postId,
-    });
+      .order("created_at", { ascending: true });
 
     if (!error) {
-      setPitCount((prev) => prev + 1);
-      setHasPitted(true);
-
-      if (typeof window !== "undefined") {
-        const raw = localStorage.getItem("be-calm-pitted-posts");
-        let ids: number[] = [];
-
-        if (raw) {
-          try {
-            ids = JSON.parse(raw);
-          } catch {
-            ids = [];
-          }
-        }
-
-        const next = Array.from(new Set([...ids, postId]));
-        localStorage.setItem("be-calm-pitted-posts", JSON.stringify(next));
-      }
+      setComments((data ?? []) as CommentItem[]);
     }
 
-    setPitLoading(false);
+    setLoadingComments(false);
   }
 
-  async function handleComment() {
-    if (!commentText.trim()) return;
+  useEffect(() => {
+    loadComments();
+  }, [postId]);
+
+  async function handleSubmitComment() {
+    const content = commentText.trim();
+    if (!content || loading) return;
 
     setLoading(true);
 
-    const { error } = await supabase.from("comments").insert({
+    const optimisticComment: CommentItem = {
+      id: Date.now(),
       post_id: postId,
-      content: commentText,
-      nickname,
-    });
+      content,
+      created_at: new Date().toISOString(),
+    };
 
-    if (!error) {
-      setCommentText("");
-      fetchComments();
+    setComments((prev) => [...prev, optimisticComment]);
+    setCommentText("");
+    setExpanded(true);
+
+    const { data, error } = await supabase
+      .from("comments")
+      .insert([
+        {
+          post_id: postId,
+          content,
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select("id, post_id, content, created_at")
+      .single();
+
+    if (error) {
+      // rollback
+      setComments((prev) => prev.filter((item) => item.id !== optimisticComment.id));
+      alert("留言送出失敗：" + error.message);
+      setCommentText(content);
+      setLoading(false);
+      return;
     }
+
+    setComments((prev) =>
+      prev.map((item) => (item.id === optimisticComment.id ? (data as CommentItem) : item))
+    );
 
     setLoading(false);
   }
 
+  const previewComments = useMemo(() => {
+    if (expanded) return comments;
+    return comments.slice(-2);
+  }, [comments, expanded]);
+
   return (
-    <div className="mt-5 border-t border-slate-100 pt-4">
-      {/* 主互動列 */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={handlePit}
-          disabled={pitLoading || hasPitted}
-          className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            hasPitted
-              ? "bg-rose-100 text-rose-700"
-              : "bg-slate-900 text-white hover:opacity-90"
-          }`}
-        >
-          {hasPitted ? "已踩坑" : pitLoading ? "送出中..." : "坑 +1"}
-        </button>
-
-        <div className="text-sm text-slate-500">
-          已有 <span className="font-semibold text-slate-900">{pitCount}</span> 人踩坑
-        </div>
-      </div>
-
-      {/* 留言區 */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-        <div className="mb-2 text-xs text-slate-500">
-          目前身分：<span className="font-medium text-slate-700">{nickname}</span>
+    <div className="mt-5 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-semibold text-slate-900">
+          留言 {comments.length > 0 ? `(${comments.length})` : ""}
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            placeholder="補充你的踩雷經驗..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm outline-none"
-          />
-
+        {comments.length > 2 && (
           <button
-            onClick={handleComment}
-            disabled={loading}
-            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 ring-1 ring-slate-200 disabled:opacity-50"
+            onClick={() => setExpanded((prev) => !prev)}
+            className="text-xs font-medium text-slate-500 hover:text-slate-900"
           >
-            {loading ? "送出中..." : "留言"}
+            {expanded ? "收起留言" : "查看全部"}
           </button>
-        </div>
+        )}
       </div>
 
-      {/* 留言列表 */}
-      {comments.length > 0 && (
-        <div className="mt-4 space-y-3">
-          {comments.map((comment) => (
-            <div
-              key={comment.id}
-              className="flex gap-3 rounded-2xl bg-slate-50 px-4 py-3"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 via-rose-500 to-orange-400 text-xs font-bold text-white">
-                {avatarText(comment.nickname)}
+      <div className="mb-4 flex items-end gap-2">
+        <textarea
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="留下你的想法..."
+          rows={1}
+          className="min-h-[44px] flex-1 resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none placeholder:text-slate-400"
+        />
+
+        <button
+          type="button"
+          onClick={handleSubmitComment}
+          disabled={loading || !commentText.trim()}
+          className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+        >
+          {loading ? "送出中" : "留言"}
+        </button>
+      </div>
+
+      {loadingComments ? (
+        <div className="text-sm text-slate-400">載入留言中...</div>
+      ) : previewComments.length === 0 ? (
+        <div className="text-sm text-slate-400">還沒有留言，來留第一則吧。</div>
+      ) : (
+        <div className="space-y-3">
+          {previewComments.map((comment) => (
+            <div key={comment.id} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-slate-800">匿名用戶</div>
+                <div className="text-xs text-slate-400">{formatRelativeTime(comment.created_at)}</div>
               </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900">
-                    {comment.nickname || "匿名用戶"}
-                  </span>
-                  <span className="text-xs text-slate-400">
-                    {formatCommentTime(comment.created_at)}
-                  </span>
-                </div>
-
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                  {comment.content}
-                </p>
+              <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                {comment.content}
               </div>
             </div>
           ))}
