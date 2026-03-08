@@ -40,7 +40,7 @@ function formatDateTime(dateString: string | null) {
   if (Number.isNaN(d.getTime())) return "未知時間";
 
   return new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
+    timeZone: "Australia/Brisbane",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -485,6 +485,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
   const [savedIds, setSavedIds] = useState<number[]>([]);
+  const [expandedPostIds, setExpandedPostIds] = useState<number[]>([]);
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(6);
@@ -594,6 +595,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     localStorage.setItem("be-calm-saved-posts", JSON.stringify(next));
   }
 
+  function toggleExpand(postId: number) {
+    setExpandedPostIds((prev) =>
+      prev.includes(postId) ? prev.filter((id) => id !== postId) : [...prev, postId]
+    );
+  }
+
   function openLightbox(mediaList: MediaItem[], index: number) {
     if (!mediaList.length) return;
     setLightboxMedia(mediaList);
@@ -627,6 +634,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
             {displayPosts.map((post, index) => {
               const isSaved = savedIds.includes(post.id);
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
+              const isExpanded = expandedPostIds.includes(post.id);
+              const shouldTruncate = post.content.length > 140;
 
               return (
                 <article
@@ -732,7 +741,24 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                     <h2 className="text-2xl font-black text-slate-900">{post.title}</h2>
 
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700">{post.content}</p>
+                    <div className="mt-3">
+                      <p
+                        className={`whitespace-pre-wrap text-sm leading-7 text-slate-700 ${
+                          !isExpanded && shouldTruncate ? "line-clamp-4" : ""
+                        }`}
+                      >
+                        {post.content}
+                      </p>
+
+                      {shouldTruncate && (
+                        <button
+                          onClick={() => toggleExpand(post.id)}
+                          className="mt-2 text-sm font-medium text-slate-500 hover:text-slate-900"
+                        >
+                          {isExpanded ? "收起" : "繼續閱讀"}
+                        </button>
+                      )}
+                    </div>
 
                     <ShareButtons post={post} />
                     <PostActions postId={post.id} />
