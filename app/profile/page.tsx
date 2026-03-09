@@ -35,16 +35,17 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (loading) return;
+
     if (!user) {
       router.replace("/login");
       return;
     }
 
-    async function loadProfile() {
+    async function loadProfile(userId: string) {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, email, username, display_name, avatar_url")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single();
 
       if (error) {
@@ -59,7 +60,7 @@ export default function ProfilePage() {
       setAvatarUrl(row.avatar_url || "");
     }
 
-    loadProfile();
+    loadProfile(user.id);
   }, [user, loading, router]);
 
   async function handleUploadAvatar(file: File) {
