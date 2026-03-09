@@ -28,9 +28,7 @@ type MediaItem = {
 
 export default function WritePage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-
-  const [pageReady, setPageReady] = useState(false);
+  const { user, loading } = useAuth();
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("店家");
@@ -48,21 +46,17 @@ export default function WritePage() {
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const isIncident = category === "人物/事件";
 
   useEffect(() => {
-    if (authLoading) return;
-
+    if (loading) return;
     if (!user) {
       router.replace("/login");
-      return;
     }
-
-    setPageReady(true);
-  }, [authLoading, user, router]);
+  }, [user, loading, router]);
 
   async function compressImage(file: File) {
     const options = {
@@ -79,7 +73,7 @@ export default function WritePage() {
   }
 
   async function uploadFile(file: File, folder: string) {
-    const fileExt = file.name.split(".").pop();
+    const fileExt = file.name.split(".").pop() || "bin";
     const fileName = `${folder}/${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}.${fileExt}`;
@@ -112,35 +106,26 @@ export default function WritePage() {
     e.preventDefault();
 
     if (!user) {
-      alert("請先登入");
       router.push("/login");
       return;
     }
 
-    if (!title.trim()) {
-      alert("請填寫標題");
-      return;
-    }
-
-    if (!content.trim()) {
-      alert("請填寫內容");
-      return;
-    }
+    setLoadingSubmit(true);
+    setSubmitted(false);
 
     if (isIncident) {
       if (!incidentType) {
         alert("請先選擇事件類型");
+        setLoadingSubmit(false);
         return;
       }
 
       if (!legalConfirmed) {
         alert("請先勾選法律提醒確認");
+        setLoadingSubmit(false);
         return;
       }
     }
-
-    setLoading(true);
-    setSubmitted(false);
 
     try {
       let mediaItems: MediaItem[] = [];
@@ -161,15 +146,15 @@ export default function WritePage() {
       const { error } = await supabase.from("posts").insert([
         {
           user_id: user.id,
-          title: title.trim(),
+          title,
           category,
           country,
-          city: city.trim() || null,
-          location: location.trim() || null,
-          place_name: placeName.trim() || null,
-          google_maps_url: googleMapsUrl.trim() || null,
-          external_url: externalUrl.trim() || null,
-          content: content.trim(),
+          city: city || null,
+          location,
+          place_name: placeName || null,
+          google_maps_url: googleMapsUrl || null,
+          external_url: externalUrl || null,
+          content,
           image_url: firstImage,
           video_url: firstVideo,
           media_urls: mediaItems,
@@ -181,7 +166,7 @@ export default function WritePage() {
 
       if (error) {
         alert("發文失敗：" + error.message);
-        setLoading(false);
+        setLoadingSubmit(false);
         return;
       }
 
@@ -200,25 +185,22 @@ export default function WritePage() {
       setLegalConfirmed(false);
       setImageFiles([]);
       setVideoFiles([]);
-      setLoading(false);
+      setLoadingSubmit(false);
 
       setTimeout(() => {
         router.push("/");
       }, 1000);
     } catch (error: any) {
-      setLoading(false);
-      alert("上傳失敗：" + (error?.message || "未知錯誤"));
+      setLoadingSubmit(false);
+      alert("上傳失敗：" + error.message);
     }
   }
 
-  if (authLoading || !pageReady) {
+  if (loading || !user) {
     return (
       <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
-        <div className="mx-auto max-w-2xl">
-          <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
-            <h1 className="text-2xl font-black">發一篇避坑</h1>
-            <p className="mt-2 text-sm text-slate-500">正在確認登入狀態...</p>
-          </section>
+        <div className="mx-auto max-w-2xl rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
+          載入中...
         </div>
       </main>
     );
@@ -457,10 +439,10 @@ export default function WritePage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loadingSubmit}
               className="rounded-full bg-slate-900 px-6 py-3 text-white disabled:opacity-50"
             >
-              {loading ? "送出中..." : "送出貼文"}
+              {loadingSubmit ? "送出中..." : "送出貼文"}
             </button>
 
             {submitted && (

@@ -27,6 +27,7 @@ type ProfileItem = {
   email?: string | null;
   username?: string | null;
   display_name?: string | null;
+  avatar_url?: string | null;
 };
 
 function formatRelativeTime(dateString: string | null) {
@@ -59,6 +60,10 @@ function getProfileName(profile?: ProfileItem | null, fallbackEmail?: string | n
   if (profile?.email?.trim()) return profile.email.split("@")[0];
   if (fallbackEmail?.trim()) return fallbackEmail.split("@")[0];
   return "會員";
+}
+
+function getProfileInitial(profile?: ProfileItem | null, fallbackEmail?: string | null) {
+  return getProfileName(profile, fallbackEmail).slice(0, 1).toUpperCase();
 }
 
 async function uploadCommentMedia(file: File) {
@@ -137,7 +142,7 @@ export default function PostActions({ postId }: { postId: number }) {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, email, username, display_name")
+      .select("id, email, username, display_name, avatar_url")
       .in("id", userIds);
 
     if (error) {
@@ -323,6 +328,7 @@ export default function PostActions({ postId }: { postId: number }) {
           email: user.email,
           display_name: prev[user.id]?.display_name ?? null,
           username: prev[user.id]?.username ?? null,
+          avatar_url: prev[user.id]?.avatar_url ?? null,
         },
       }));
       setCommentText("");
@@ -404,6 +410,7 @@ export default function PostActions({ postId }: { postId: number }) {
           email: user.email,
           display_name: prev[user.id]?.display_name ?? null,
           username: prev[user.id]?.username ?? null,
+          avatar_url: prev[user.id]?.avatar_url ?? null,
         },
       }));
       setReplyTextMap((prev) => ({ ...prev, [parentId]: "" }));
@@ -452,7 +459,8 @@ export default function PostActions({ postId }: { postId: number }) {
     setReplyingTo((prev) => (prev === commentId ? null : commentId));
   }
 
-  const myDisplayName = getProfileName(profilesMap[user?.id || ""], user?.email ?? null);
+  const myProfile = user ? profilesMap[user.id] : null;
+  const myDisplayName = getProfileName(myProfile, user?.email ?? null);
 
   const topLevelComments = useMemo(() => comments.filter((c) => !c.parent_id), [comments]);
 
@@ -559,9 +567,17 @@ export default function PostActions({ postId }: { postId: number }) {
                           className="rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70"
                         >
                           <div className="mb-2 flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
-                              {commentName.slice(0, 1)}
-                            </div>
+                            {commentProfile?.avatar_url ? (
+                              <img
+                                src={commentProfile.avatar_url}
+                                alt={commentName}
+                                className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
+                              />
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
+                                {getProfileInitial(commentProfile)}
+                              </div>
+                            )}
 
                             <div className="min-w-0">
                               <div className="text-sm font-semibold text-slate-900">
@@ -607,6 +623,18 @@ export default function PostActions({ postId }: { postId: number }) {
                                     className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
                                   >
                                     <div className="mb-1 flex items-center gap-2">
+                                      {replyProfile?.avatar_url ? (
+                                        <img
+                                          src={replyProfile.avatar_url}
+                                          alt={replyName}
+                                          className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-200"
+                                        />
+                                      ) : (
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
+                                          {getProfileInitial(replyProfile)}
+                                        </div>
+                                      )}
+
                                       <div className="text-xs font-semibold text-slate-800">
                                         {replyName}
                                       </div>
@@ -714,9 +742,17 @@ export default function PostActions({ postId }: { postId: number }) {
               <div className="border-t border-slate-100 bg-white px-4 py-3">
                 {user ? (
                   <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
-                      {myDisplayName.slice(0, 1)}
-                    </div>
+                    {myProfile?.avatar_url ? (
+                      <img
+                        src={myProfile.avatar_url}
+                        alt={myDisplayName}
+                        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
+                        {getProfileInitial(myProfile, user.email ?? null)}
+                      </div>
+                    )}
 
                     <div className="flex-1">
                       <div className="mb-2 text-sm font-semibold text-slate-900">
