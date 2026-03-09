@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import PostActions from "./PostActions";
 import BottomNav from "./BottomNav";
+import { useAuth } from "./AuthProvider";
+import { supabase } from "../lib/supabase";
 
 type MediaItem = {
   type: "image" | "video";
@@ -10,6 +13,14 @@ type MediaItem = {
 };
 
 type RiskLevel = "低" | "中" | "高";
+
+type Profile = {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+};
 
 type Post = {
   id: number;
@@ -29,6 +40,7 @@ type Post = {
   incident_type?: string | null;
   risk_level?: RiskLevel | null;
   content_type?: "normal" | "incident" | null;
+  author_profile?: Profile | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -86,13 +98,8 @@ function getMediaList(post: Post): MediaItem[] {
 
   const fallback: MediaItem[] = [];
 
-  if (post.video_url) {
-    fallback.push({ type: "video", url: post.video_url });
-  }
-
-  if (post.image_url) {
-    fallback.push({ type: "image", url: post.image_url });
-  }
+  if (post.video_url) fallback.push({ type: "video", url: post.video_url });
+  if (post.image_url) fallback.push({ type: "image", url: post.image_url });
 
   return fallback;
 }
@@ -118,6 +125,17 @@ function getCategoryBadge(post: Post) {
       {post.category}
     </span>
   );
+}
+
+function getAuthorName(profile?: Profile | null) {
+  if (profile?.display_name?.trim()) return profile.display_name.trim();
+  if (profile?.username?.trim()) return profile.username.trim();
+  if (profile?.email?.trim()) return profile.email.split("@")[0];
+  return "會員";
+}
+
+function getAuthorInitial(profile?: Profile | null) {
+  return getAuthorName(profile).slice(0, 1).toUpperCase();
 }
 
 function ShareButtons({ post }: { post: Post }) {
@@ -450,6 +468,10 @@ function SearchModal({
                   </div>
 
                   <div className="mt-1 text-xs text-slate-500">
+                    作者：{getAuthorName(post.author_profile)}
+                  </div>
+
+                  <div className="mt-1 text-xs text-slate-500">
                     {post.place_name || post.location || post.category}
                     {post.incident_type ? ` · ${post.incident_type}` : ""}
                   </div>
@@ -466,9 +488,13 @@ function SearchModal({
 }
 
 export default function PostFeed({ posts }: { posts: Post[] }) {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
   const [savedIds, setSavedIds] = useState<number[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
   const [expandedPostIds, setExpandedPostIds] = useState<number[]>([]);
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -477,15 +503,34 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [hasHandledHashScroll, setHasHandledHashScroll] = useState(false);
 
   useEffect(() => {
-    const raw = localStorage.getItem("be-calm-saved-posts");
-    if (raw) {
-      try {
-        setSavedIds(JSON.parse(raw));
-      } catch {
+    async function loadSavedPosts() {
+      if (!user) {
         setSavedIds([]);
+        setSavedLoading(false);
+        return;
       }
+
+      setSavedLoading(true);
+
+      const { data, error } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("載入收藏失敗：", error.message);
+        setSavedIds([]);
+        setSavedLoading(false);
+        return;
+      }
+
+      const ids = ((data ?? []) as { post_id: number }[]).map((item) => item.post_id);
+      setSavedIds(ids);
+      setSavedLoading(false);
     }
-  }, []);
+
+    loadSavedPosts();
+  }, [user]);
 
   useEffect(() => {
     let ticking = false;
@@ -511,6 +556,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     if (!q) return [];
 
     return posts.filter((post) => {
+      const authorName = getAuthorName(post.author_profile).toLowerCase();
+
       return (
         post.title?.toLowerCase().includes(q) ||
         post.content?.toLowerCase().includes(q) ||
@@ -519,13 +566,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         post.category?.toLowerCase().includes(q) ||
         (post.country || "").toLowerCase().includes(q) ||
         (post.city || "").toLowerCase().includes(q) ||
-        (post.incident_type || "").toLowerCase().includes(q)
+        (post.incident_type || "").toLowerCase().includes(q) ||
+        authorName.includes(q)
       );
     });
   }, [posts, query]);
 
   const savedPosts = useMemo(() => posts.filter((post) => savedIds.includes(post.id)), [posts, savedIds]);
-
   const sourcePosts = activeTab === "saved" ? savedPosts : posts;
 
   useEffect(() => {
@@ -570,13 +617,43 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     setActiveTab(tab);
   }
 
-  function toggleSave(postId: number) {
-    const next = savedIds.includes(postId)
-      ? savedIds.filter((id) => id !== postId)
-      : [...savedIds, postId];
+  async function toggleSave(postId: number) {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
 
-    setSavedIds(next);
-    localStorage.setItem("be-calm-saved-posts", JSON.stringify(next));
+    const isSaved = savedIds.includes(postId);
+
+    if (isSaved) {
+      setSavedIds((prev) => prev.filter((id) => id !== postId));
+
+      const { error } = await supabase
+        .from("saved_posts")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("post_id", postId);
+
+      if (error) {
+        console.error("取消收藏失敗：", error.message);
+        setSavedIds((prev) => [...prev, postId]);
+      }
+      return;
+    }
+
+    setSavedIds((prev) => [...prev, postId]);
+
+    const { error } = await supabase.from("saved_posts").insert([
+      {
+        user_id: user.id,
+        post_id: postId,
+      },
+    ]);
+
+    if (error) {
+      console.error("收藏失敗：", error.message);
+      setSavedIds((prev) => prev.filter((id) => id !== postId));
+    }
   }
 
   function toggleExpand(postId: number) {
@@ -609,7 +686,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   return (
     <>
       <section className="mb-24 space-y-5">
-        {displayPosts.length === 0 ? (
+        {savedLoading && activeTab === "saved" ? (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
+            載入收藏中...
+          </div>
+        ) : displayPosts.length === 0 ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
             {activeTab === "saved" ? "你目前還沒有收藏貼文" : "目前還沒有貼文，來發第一篇吧。"}
           </div>
@@ -620,6 +701,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
               const isExpanded = expandedPostIds.includes(post.id);
               const shouldTruncate = post.content.length > 140;
+              const authorName = getAuthorName(post.author_profile);
+              const displayPlace = post.place_name || post.location || null;
 
               return (
                 <article
@@ -631,19 +714,27 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
-                          isIncidentPost
-                            ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
-                            : "bg-gradient-to-br from-slate-900 to-slate-700"
-                        }`}
-                      >
-                        {isIncidentPost ? "警" : "坑"}
-                      </div>
+                      {post.author_profile?.avatar_url ? (
+                        <img
+                          src={post.author_profile.avatar_url}
+                          alt={authorName}
+                          className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                        />
+                      ) : (
+                        <div
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                            isIncidentPost
+                              ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
+                              : "bg-gradient-to-br from-slate-900 to-slate-700"
+                          }`}
+                        >
+                          {getAuthorInitial(post.author_profile)}
+                        </div>
+                      )}
 
                       <div className="min-w-0">
                         <div className="truncate text-[15px] font-semibold text-slate-900">
-                          {post.place_name || post.location || (isIncidentPost ? "匿名事件分享" : "匿名避坑人")}
+                          {authorName}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
                           {formatDateTime(post.created_at)}
@@ -661,7 +752,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     </button>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  {displayPlace && (
+                    <div className="mt-4 text-sm font-semibold text-slate-800">
+                      {displayPlace}
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {getCategoryBadge(post)}
 
                     {formatLocation(post) && (

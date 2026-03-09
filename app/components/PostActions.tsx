@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "./AuthProvider";
 
 type CommentItem = {
   id: number;
   post_id: number;
+  user_id?: string | null;
   content: string;
   created_at: string | null;
   parent_id?: number | null;
@@ -16,6 +19,14 @@ type CommentItem = {
 type VoteItem = {
   id: number;
   post_id: number;
+  user_id?: string | null;
+};
+
+type ProfileItem = {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+  display_name?: string | null;
 };
 
 function formatRelativeTime(dateString: string | null) {
@@ -42,20 +53,27 @@ function formatRelativeTime(dateString: string | null) {
   }).format(date);
 }
 
+function getProfileName(profile?: ProfileItem | null, fallbackEmail?: string | null) {
+  if (profile?.display_name?.trim()) return profile.display_name.trim();
+  if (profile?.username?.trim()) return profile.username.trim();
+  if (profile?.email?.trim()) return profile.email.split("@")[0];
+  if (fallbackEmail?.trim()) return fallbackEmail.split("@")[0];
+  return "會員";
+}
+
 async function uploadCommentMedia(file: File) {
   const ext = file.name.split(".").pop() || "bin";
   const folder = file.type.startsWith("video/") ? "comment-videos" : "comment-images";
   const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
   const { error } = await supabase.storage.from("media").upload(path, file);
-
   if (error) throw error;
 
   const { data } = supabase.storage.from("media").getPublicUrl(path);
 
   return {
     media_url: data.publicUrl,
-    media_type: file.type.startsWith("video/") ? "video" as const : "image" as const,
+    media_type: file.type.startsWith("video/") ? ("video" as const) : ("image" as const),
   };
 }
 
@@ -88,7 +106,11 @@ function MediaPreview({
 }
 
 export default function PostActions({ postId }: { postId: number }) {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const [comments, setComments] = useState<CommentItem[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileItem>>({});
   const [commentText, setCommentText] = useState("");
   const [commentFile, setCommentFile] = useState<File | null>(null);
   const [loadingComment, setLoadingComment] = useState(false);
@@ -105,19 +127,48 @@ export default function PostActions({ postId }: { postId: number }) {
   const [replyFileMap, setReplyFileMap] = useState<Record<number, File | null>>({});
   const [loadingReplyId, setLoadingReplyId] = useState<number | null>(null);
 
-  const storageKey = `be-calm-pitted-post-${postId}`;
+  const replyBoxRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  async function loadProfiles(userIds: string[]) {
+    if (userIds.length === 0) {
+      setProfilesMap({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email, username, display_name")
+      .in("id", userIds);
+
+    if (error) {
+      console.error("載入 profiles 失敗：", error.message);
+      return;
+    }
+
+    const nextMap: Record<string, ProfileItem> = {};
+    ((data as ProfileItem[]) || []).forEach((profile) => {
+      nextMap[profile.id] = profile;
+    });
+    setProfilesMap(nextMap);
+  }
 
   async function loadComments() {
     setLoadingComments(true);
 
     const { data, error } = await supabase
       .from("comments")
-      .select("id, post_id, content, created_at, parent_id, media_url, media_type")
+      .select("id, post_id, user_id, content, created_at, parent_id, media_url, media_type")
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
     if (!error) {
-      setComments((data ?? []) as CommentItem[]);
+      const rows = ((data ?? []) as CommentItem[]) || [];
+      setComments(rows);
+
+      const userIds = Array.from(
+        new Set(rows.map((item) => item.user_id).filter(Boolean) as string[])
+      );
+      await loadProfiles(userIds);
     }
 
     setLoadingComments(false);
@@ -126,32 +177,29 @@ export default function PostActions({ postId }: { postId: number }) {
   async function loadVotes() {
     const { data, error } = await supabase
       .from("votes")
-      .select("id, post_id")
+      .select("id, post_id, user_id")
       .eq("post_id", postId);
 
     if (!error) {
-      setPitCount(((data ?? []) as VoteItem[]).length);
+      const voteRows = ((data ?? []) as VoteItem[]) || [];
+      setPitCount(voteRows.length);
+
+      if (user) {
+        const mine = voteRows.find((item) => item.user_id === user.id);
+        setHasPitted(!!mine);
+        setUserVoteId(mine?.id ?? null);
+      } else {
+        setHasPitted(false);
+        setUserVoteId(null);
+      }
     }
   }
 
   useEffect(() => {
     loadComments();
     loadVotes();
-
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          setHasPitted(true);
-          setUserVoteId(parsed.voteId ?? null);
-        } catch {
-          setHasPitted(false);
-          setUserVoteId(null);
-        }
-      }
-    }
-  }, [postId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId, user?.id]);
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -169,7 +217,26 @@ export default function PostActions({ postId }: { postId: number }) {
     };
   }, [sheetOpen]);
 
+  useEffect(() => {
+    if (!replyingTo) return;
+    const el = replyBoxRefs.current[replyingTo];
+    if (el) {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+    }
+  }, [replyingTo]);
+
+  function goLogin() {
+    router.push("/login");
+  }
+
   async function handlePitToggle() {
+    if (!user) {
+      goLogin();
+      return;
+    }
+
     if (loadingPit) return;
 
     setLoadingPit(true);
@@ -180,7 +247,7 @@ export default function PostActions({ postId }: { postId: number }) {
 
       const { data, error } = await supabase
         .from("votes")
-        .insert([{ post_id: postId }])
+        .insert([{ post_id: postId, user_id: user.id }])
         .select("id")
         .single();
 
@@ -192,13 +259,7 @@ export default function PostActions({ postId }: { postId: number }) {
         return;
       }
 
-      const voteId = data?.id ?? null;
-      setUserVoteId(voteId);
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem(storageKey, JSON.stringify({ voteId }));
-      }
-
+      setUserVoteId(data?.id ?? null);
       setLoadingPit(false);
       return;
     }
@@ -206,28 +267,28 @@ export default function PostActions({ postId }: { postId: number }) {
     setPitCount((prev) => Math.max(0, prev - 1));
     setHasPitted(false);
 
-    if (userVoteId) {
-      const { error } = await supabase.from("votes").delete().eq("id", userVoteId);
+    const { error } = userVoteId
+      ? await supabase.from("votes").delete().eq("id", userVoteId).eq("user_id", user.id)
+      : await supabase.from("votes").delete().eq("post_id", postId).eq("user_id", user.id);
 
-      if (error) {
-        setPitCount((prev) => prev + 1);
-        setHasPitted(true);
-        alert("取消坑失敗：" + error.message);
-        setLoadingPit(false);
-        return;
-      }
+    if (error) {
+      setPitCount((prev) => prev + 1);
+      setHasPitted(true);
+      alert("取消坑失敗：" + error.message);
+      setLoadingPit(false);
+      return;
     }
 
     setUserVoteId(null);
-
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(storageKey);
-    }
-
     setLoadingPit(false);
   }
 
   async function handleSubmitComment() {
+    if (!user) {
+      goLogin();
+      return;
+    }
+
     const content = commentText.trim();
     if ((!content && !commentFile) || loadingComment) return;
 
@@ -246,6 +307,7 @@ export default function PostActions({ postId }: { postId: number }) {
       const optimisticComment: CommentItem = {
         id: Date.now(),
         post_id: postId,
+        user_id: user.id,
         content,
         created_at: new Date().toISOString(),
         parent_id: null,
@@ -254,6 +316,15 @@ export default function PostActions({ postId }: { postId: number }) {
       };
 
       setComments((prev) => [...prev, optimisticComment]);
+      setProfilesMap((prev) => ({
+        ...prev,
+        [user.id]: {
+          id: user.id,
+          email: user.email,
+          display_name: prev[user.id]?.display_name ?? null,
+          username: prev[user.id]?.username ?? null,
+        },
+      }));
       setCommentText("");
       setCommentFile(null);
 
@@ -262,6 +333,7 @@ export default function PostActions({ postId }: { postId: number }) {
         .insert([
           {
             post_id: postId,
+            user_id: user.id,
             content,
             created_at: new Date().toISOString(),
             parent_id: null,
@@ -269,7 +341,7 @@ export default function PostActions({ postId }: { postId: number }) {
             media_type: uploadedMedia.media_type,
           },
         ])
-        .select("id, post_id, content, created_at, parent_id, media_url, media_type")
+        .select("id, post_id, user_id, content, created_at, parent_id, media_url, media_type")
         .single();
 
       if (error) {
@@ -291,6 +363,11 @@ export default function PostActions({ postId }: { postId: number }) {
   }
 
   async function handleSubmitReply(parentId: number) {
+    if (!user) {
+      goLogin();
+      return;
+    }
+
     const content = (replyTextMap[parentId] || "").trim();
     const file = replyFileMap[parentId] || null;
 
@@ -311,6 +388,7 @@ export default function PostActions({ postId }: { postId: number }) {
       const optimisticReply: CommentItem = {
         id: Date.now(),
         post_id: postId,
+        user_id: user.id,
         content,
         created_at: new Date().toISOString(),
         parent_id: parentId,
@@ -319,6 +397,15 @@ export default function PostActions({ postId }: { postId: number }) {
       };
 
       setComments((prev) => [...prev, optimisticReply]);
+      setProfilesMap((prev) => ({
+        ...prev,
+        [user.id]: {
+          id: user.id,
+          email: user.email,
+          display_name: prev[user.id]?.display_name ?? null,
+          username: prev[user.id]?.username ?? null,
+        },
+      }));
       setReplyTextMap((prev) => ({ ...prev, [parentId]: "" }));
       setReplyFileMap((prev) => ({ ...prev, [parentId]: null }));
 
@@ -327,6 +414,7 @@ export default function PostActions({ postId }: { postId: number }) {
         .insert([
           {
             post_id: postId,
+            user_id: user.id,
             content,
             created_at: new Date().toISOString(),
             parent_id: parentId,
@@ -334,7 +422,7 @@ export default function PostActions({ postId }: { postId: number }) {
             media_type: uploadedMedia.media_type,
           },
         ])
-        .select("id, post_id, content, created_at, parent_id, media_url, media_type")
+        .select("id, post_id, user_id, content, created_at, parent_id, media_url, media_type")
         .single();
 
       if (error) {
@@ -356,10 +444,17 @@ export default function PostActions({ postId }: { postId: number }) {
     setLoadingReplyId(null);
   }
 
-  const topLevelComments = useMemo(
-    () => comments.filter((c) => !c.parent_id),
-    [comments]
-  );
+  function toggleReply(commentId: number) {
+    if (!user) {
+      goLogin();
+      return;
+    }
+    setReplyingTo((prev) => (prev === commentId ? null : commentId));
+  }
+
+  const myDisplayName = getProfileName(profilesMap[user?.id || ""], user?.email ?? null);
+
+  const topLevelComments = useMemo(() => comments.filter((c) => !c.parent_id), [comments]);
 
   const repliesByParent = useMemo(() => {
     const map: Record<number, CommentItem[]> = {};
@@ -401,9 +496,7 @@ export default function PostActions({ postId }: { postId: number }) {
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className={`h-[16px] w-[16px] transition-transform duration-150 ${
-              sheetOpen ? "scale-110" : ""
-            }`}
+            className={`h-[16px] w-[16px] transition-transform duration-150 ${sheetOpen ? "scale-110" : ""}`}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -426,7 +519,7 @@ export default function PostActions({ postId }: { postId: number }) {
           />
 
           <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-2xl">
-            <div className="max-h-[84vh] overflow-hidden rounded-t-[32px] border border-slate-200/70 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.22)]">
+            <div className="flex max-h-[84vh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200/70 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.22)]">
               <div className="sticky top-0 z-10 rounded-t-[32px] border-b border-slate-100 bg-white/95 backdrop-blur">
                 <div className="flex justify-center pt-3">
                   <div className="h-1.5 w-12 rounded-full bg-slate-300/90" />
@@ -447,7 +540,7 @@ export default function PostActions({ postId }: { postId: number }) {
                 </div>
               </div>
 
-              <div className="max-h-[calc(84vh-170px)] overflow-y-auto px-4 py-4">
+              <div className="flex-1 overflow-y-auto px-4 py-4">
                 {loadingComments ? (
                   <div className="text-sm text-slate-400">載入留言中...</div>
                 ) : topLevelComments.length === 0 ? (
@@ -457,6 +550,8 @@ export default function PostActions({ postId }: { postId: number }) {
                     {topLevelComments.map((comment) => {
                       const replies = repliesByParent[comment.id] || [];
                       const isReplying = replyingTo === comment.id;
+                      const commentProfile = comment.user_id ? profilesMap[comment.user_id] : null;
+                      const commentName = getProfileName(commentProfile);
 
                       return (
                         <div
@@ -465,11 +560,13 @@ export default function PostActions({ postId }: { postId: number }) {
                         >
                           <div className="mb-2 flex items-center gap-3">
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
-                              匿
+                              {commentName.slice(0, 1)}
                             </div>
 
                             <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-900">匿名用戶</div>
+                              <div className="text-sm font-semibold text-slate-900">
+                                {commentName}
+                              </div>
                               <div className="text-xs text-slate-400">
                                 {formatRelativeTime(comment.created_at)}
                               </div>
@@ -491,45 +588,55 @@ export default function PostActions({ postId }: { postId: number }) {
                           <div className="mt-2 pl-11">
                             <button
                               type="button"
-                              onClick={() =>
-                                setReplyingTo((prev) => (prev === comment.id ? null : comment.id))
-                              }
+                              onClick={() => toggleReply(comment.id)}
                               className="text-xs font-medium text-slate-500 hover:text-slate-900"
                             >
-                              回覆
+                              {isReplying ? "收起回覆" : "回覆"}
                             </button>
                           </div>
 
                           {replies.length > 0 && (
                             <div className="mt-3 space-y-2 pl-11">
-                              {replies.map((reply) => (
-                                <div
-                                  key={reply.id}
-                                  className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
-                                >
-                                  <div className="mb-1 flex items-center gap-2">
-                                    <div className="text-xs font-semibold text-slate-800">匿名用戶</div>
-                                    <div className="text-[11px] text-slate-400">
-                                      {formatRelativeTime(reply.created_at)}
+                              {replies.map((reply) => {
+                                const replyProfile = reply.user_id ? profilesMap[reply.user_id] : null;
+                                const replyName = getProfileName(replyProfile);
+
+                                return (
+                                  <div
+                                    key={reply.id}
+                                    className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
+                                  >
+                                    <div className="mb-1 flex items-center gap-2">
+                                      <div className="text-xs font-semibold text-slate-800">
+                                        {replyName}
+                                      </div>
+                                      <div className="text-[11px] text-slate-400">
+                                        {formatRelativeTime(reply.created_at)}
+                                      </div>
                                     </div>
+
+                                    {!!reply.content && (
+                                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                        {reply.content}
+                                      </div>
+                                    )}
+
+                                    {reply.media_url && reply.media_type && (
+                                      <MediaPreview url={reply.media_url} type={reply.media_type} />
+                                    )}
                                   </div>
-
-                                  {!!reply.content && (
-                                    <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                      {reply.content}
-                                    </div>
-                                  )}
-
-                                  {reply.media_url && reply.media_type && (
-                                    <MediaPreview url={reply.media_url} type={reply.media_type} />
-                                  )}
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
 
-                          {isReplying && (
-                            <div className="mt-3 pl-11">
+                          {isReplying && user && (
+                            <div
+                              ref={(el) => {
+                                replyBoxRefs.current[comment.id] = el;
+                              }}
+                              className="mt-3 pl-11"
+                            >
                               <textarea
                                 value={replyTextMap[comment.id] || ""}
                                 onChange={(e) =>
@@ -538,7 +645,13 @@ export default function PostActions({ postId }: { postId: number }) {
                                     [comment.id]: e.target.value,
                                   }))
                                 }
-                                placeholder="回覆這則留言..."
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSubmitReply(comment.id);
+                                  }
+                                }}
+                                placeholder="回覆這則留言...（Enter 送出，Shift+Enter 換行）"
                                 rows={2}
                                 className="min-h-[48px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
                               />
@@ -574,10 +687,8 @@ export default function PostActions({ postId }: { postId: number }) {
                                     onClick={() => handleSubmitReply(comment.id)}
                                     disabled={
                                       loadingReplyId === comment.id ||
-                                      (
-                                        !(replyTextMap[comment.id] || "").trim() &&
-                                        !replyFileMap[comment.id]
-                                      )
+                                      (!(replyTextMap[comment.id] || "").trim() &&
+                                        !replyFileMap[comment.id])
                                     }
                                     className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                                   >
@@ -601,51 +712,76 @@ export default function PostActions({ postId }: { postId: number }) {
               </div>
 
               <div className="border-t border-slate-100 bg-white px-4 py-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
-                    你
-                  </div>
-
-                  <div className="flex-1">
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="寫下你的留言..."
-                      rows={2}
-                      className="min-h-[52px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none"
-                    />
-
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
-                        加照片/影片
-                        <input
-                          type="file"
-                          accept="image/*,video/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0] || null;
-                            setCommentFile(file);
-                          }}
-                        />
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={handleSubmitComment}
-                        disabled={loadingComment || (!commentText.trim() && !commentFile)}
-                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
-                      >
-                        {loadingComment ? "送出中..." : "留言"}
-                      </button>
+                {user ? (
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
+                      {myDisplayName.slice(0, 1)}
                     </div>
 
-                    {commentFile && (
-                      <div className="mt-2 text-xs text-slate-500">
-                        已選擇：{commentFile.name}
+                    <div className="flex-1">
+                      <div className="mb-2 text-sm font-semibold text-slate-900">
+                        {myDisplayName}
                       </div>
-                    )}
+
+                      <textarea
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmitComment();
+                          }
+                        }}
+                        placeholder="寫下你的留言...（Enter 送出，Shift+Enter 換行）"
+                        rows={2}
+                        className="min-h-[52px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none"
+                      />
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+                          加照片/影片
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null;
+                              setCommentFile(file);
+                            }}
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={handleSubmitComment}
+                          disabled={loadingComment || (!commentText.trim() && !commentFile)}
+                          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                        >
+                          {loadingComment ? "送出中..." : "送出留言"}
+                        </button>
+                      </div>
+
+                      {commentFile && (
+                        <div className="mt-2 text-xs text-slate-500">
+                          已選擇：{commentFile.name}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600 ring-1 ring-slate-200/70">
+                    先看看大家的留言。想留言、回覆或附圖時，再登入就可以。
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={goLogin}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                      >
+                        前往登入
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

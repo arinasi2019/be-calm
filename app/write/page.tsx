@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../components/AuthProvider";
 
 const COUNTRY_OPTIONS = [
   "日本",
@@ -27,6 +28,9 @@ type MediaItem = {
 
 export default function WritePage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+
+  const [pageReady, setPageReady] = useState(false);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("店家");
@@ -48,6 +52,17 @@ export default function WritePage() {
   const [submitted, setSubmitted] = useState(false);
 
   const isIncident = category === "人物/事件";
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
+    setPageReady(true);
+  }, [authLoading, user, router]);
 
   async function compressImage(file: File) {
     const options = {
@@ -95,22 +110,37 @@ export default function WritePage() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
-    setSubmitted(false);
+
+    if (!user) {
+      alert("請先登入");
+      router.push("/login");
+      return;
+    }
+
+    if (!title.trim()) {
+      alert("請填寫標題");
+      return;
+    }
+
+    if (!content.trim()) {
+      alert("請填寫內容");
+      return;
+    }
 
     if (isIncident) {
       if (!incidentType) {
         alert("請先選擇事件類型");
-        setLoading(false);
         return;
       }
 
       if (!legalConfirmed) {
         alert("請先勾選法律提醒確認");
-        setLoading(false);
         return;
       }
     }
+
+    setLoading(true);
+    setSubmitted(false);
 
     try {
       let mediaItems: MediaItem[] = [];
@@ -130,15 +160,16 @@ export default function WritePage() {
 
       const { error } = await supabase.from("posts").insert([
         {
-          title,
+          user_id: user.id,
+          title: title.trim(),
           category,
           country,
-          city,
-          location,
-          place_name: placeName || null,
-          google_maps_url: googleMapsUrl || null,
-          external_url: externalUrl || null,
-          content,
+          city: city.trim() || null,
+          location: location.trim() || null,
+          place_name: placeName.trim() || null,
+          google_maps_url: googleMapsUrl.trim() || null,
+          external_url: externalUrl.trim() || null,
+          content: content.trim(),
           image_url: firstImage,
           video_url: firstVideo,
           media_urls: mediaItems,
@@ -176,8 +207,21 @@ export default function WritePage() {
       }, 1000);
     } catch (error: any) {
       setLoading(false);
-      alert("上傳失敗：" + error.message);
+      alert("上傳失敗：" + (error?.message || "未知錯誤"));
     }
+  }
+
+  if (authLoading || !pageReady) {
+    return (
+      <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
+        <div className="mx-auto max-w-2xl">
+          <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
+            <h1 className="text-2xl font-black">發一篇避坑</h1>
+            <p className="mt-2 text-sm text-slate-500">正在確認登入狀態...</p>
+          </section>
+        </div>
+      </main>
+    );
   }
 
   return (

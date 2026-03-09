@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import PostFeed from "./components/PostFeed";
+import SiteHeader from "./components/SiteHeader";
+import { supabase } from "./lib/supabase";
 
 type MediaItem = {
   type: "image" | "video";
@@ -11,8 +12,16 @@ type MediaItem = {
 
 type RiskLevel = "低" | "中" | "高";
 
+type Profile = {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+  display_name?: string | null;
+};
+
 type Post = {
   id: number;
+  user_id?: string | null;
   title: string;
   category: string;
   country?: string | null;
@@ -29,6 +38,7 @@ type Post = {
   incident_type?: string | null;
   risk_level?: RiskLevel | null;
   content_type?: "normal" | "incident" | null;
+  author_profile?: Profile | null;
 };
 
 type Vote = {
@@ -40,9 +50,6 @@ type Comment = {
   id: number;
   post_id: number;
 };
-
-const SUPABASE_URL = "https://hqnyqqmqpjmuyanmupxr.supabase.co";
-const SUPABASE_KEY = "sb_publishable_IP_qqclWTJZfTeuTWNurTg_1Kbe6z9W";
 
 type RankedPost = Post & {
   pitCount: number;
@@ -143,22 +150,6 @@ function RankingBlock({
   );
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${SUPABASE_URL}${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("fetch failed");
-  }
-
-  return res.json();
-}
-
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
@@ -170,15 +161,53 @@ export default function HomePage() {
 
   useEffect(() => {
     async function load() {
-      const [postsData, votesData, commentsData] = await Promise.all([
-        fetchJson<Post[]>("/rest/v1/posts?select=*&order=id.desc"),
-        fetchJson<Vote[]>("/rest/v1/votes?select=id,post_id"),
-        fetchJson<Comment[]>("/rest/v1/comments?select=id,post_id"),
+      const [postsRes, votesRes, commentsRes] = await Promise.all([
+        supabase.from("posts").select("*").order("id", { ascending: false }),
+        supabase.from("votes").select("id, post_id"),
+        supabase.from("comments").select("id, post_id"),
       ]);
 
-      setPosts(postsData);
-      setVotes(votesData);
-      setComments(commentsData);
+      const rawPosts = ((postsRes.data as Post[]) || []);
+      const userIds = Array.from(
+        new Set(rawPosts.map((post) => post.user_id).filter(Boolean) as string[])
+      );
+
+      let profileMap: Record<string, Profile> = {};
+
+      if (userIds.length > 0) {
+        const profilesRes = await supabase
+          .from("profiles")
+          .select("id, email, username, display_name")
+          .in("id", userIds);
+
+        if (!profilesRes.error) {
+          ((profilesRes.data as Profile[]) || []).forEach((profile) => {
+            profileMap[profile.id] = profile;
+          });
+        }
+      }
+
+      if (postsRes.error) {
+        console.error("載入 posts 失敗：", postsRes.error.message);
+      } else {
+        const nextPosts = rawPosts.map((post) => ({
+          ...post,
+          author_profile: post.user_id ? profileMap[post.user_id] || null : null,
+        }));
+        setPosts(nextPosts);
+      }
+
+      if (votesRes.error) {
+        console.error("載入 votes 失敗：", votesRes.error.message);
+      } else {
+        setVotes((votesRes.data as Vote[]) || []);
+      }
+
+      if (commentsRes.error) {
+        console.error("載入 comments 失敗：", commentsRes.error.message);
+      } else {
+        setComments((commentsRes.data as Comment[]) || []);
+      }
     }
 
     load();
@@ -198,7 +227,6 @@ export default function HomePage() {
     });
 
     const items = Array.from(new Set(filtered.map((p) => p.city).filter(Boolean))) as string[];
-
     return ["全部", ...items];
   }, [posts, selectedCountry]);
 
@@ -252,29 +280,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
       <div className="mx-auto max-w-3xl px-4 py-5 sm:py-6">
-        <header className="sticky top-0 z-20 mb-5 rounded-[28px] border border-slate-200 bg-white/95 px-4 py-4 shadow-sm backdrop-blur sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <img
-                src="/becalm-main-logo.png"
-                alt="避坑 Be Calm"
-                className="h-11 w-auto shrink-0 sm:h-12"
-              />
-
-              <div className="min-w-0">
-                <div className="truncate text-lg font-black text-slate-900">避坑 Be Calm</div>
-                <div className="text-xs text-slate-500">不種草，只避雷</div>
-              </div>
-            </div>
-
-            <Link
-              href="/write"
-              className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-            >
-              發貼文
-            </Link>
-          </div>
-        </header>
+        <SiteHeader />
 
         <section className="mb-5 rounded-[32px] bg-gradient-to-br from-[#111827] via-[#0f172a] to-[#1e293b] px-6 py-8 text-white shadow-xl">
           <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs ring-1 ring-white/10">
