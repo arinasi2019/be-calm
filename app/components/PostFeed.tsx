@@ -33,14 +33,21 @@ type Post = {
   created_at: string | null;
   image_url?: string | null;
   video_url?: string | null;
+  media_urls?: MediaItem[] | null;
   place_name?: string | null;
   google_maps_url?: string | null;
   external_url?: string | null;
-  media_urls?: MediaItem[] | null;
   incident_type?: string | null;
   risk_level?: RiskLevel | null;
   content_type?: "normal" | "incident" | null;
   author_profile?: Profile | null;
+
+  is_seed?: boolean;
+  seed_author_name?: string | null;
+  seed_author_slug?: string | null;
+  source_type?: string | null;
+  is_featured?: boolean | null;
+  published_at?: string | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -127,15 +134,21 @@ function getCategoryBadge(post: Post) {
   );
 }
 
-function getAuthorName(profile?: Profile | null) {
+function getAuthorName(post: Post) {
+  if (post.is_seed && post.seed_author_name?.trim()) {
+    return post.seed_author_name.trim();
+  }
+
+  const profile = post.author_profile;
+
   if (profile?.display_name?.trim()) return profile.display_name.trim();
   if (profile?.username?.trim()) return profile.username.trim();
   if (profile?.email?.trim()) return profile.email.split("@")[0];
   return "會員";
 }
 
-function getAuthorInitial(profile?: Profile | null) {
-  return getAuthorName(profile).slice(0, 1).toUpperCase();
+function getAuthorInitial(post: Post) {
+  return getAuthorName(post).slice(0, 1).toUpperCase();
 }
 
 function ShareButtons({ post }: { post: Post }) {
@@ -468,7 +481,7 @@ function SearchModal({
                   </div>
 
                   <div className="mt-1 text-xs text-slate-500">
-                    作者：{getAuthorName(post.author_profile)}
+                    作者：{getAuthorName(post)}
                   </div>
 
                   <div className="mt-1 text-xs text-slate-500">
@@ -556,7 +569,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     if (!q) return [];
 
     return posts.filter((post) => {
-      const authorName = getAuthorName(post.author_profile).toLowerCase();
+      const authorName = getAuthorName(post).toLowerCase();
 
       return (
         post.title?.toLowerCase().includes(q) ||
@@ -701,7 +714,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
               const isExpanded = expandedPostIds.includes(post.id);
               const shouldTruncate = post.content.length > 140;
-              const authorName = getAuthorName(post.author_profile);
+              const authorName = getAuthorName(post);
               const displayPlace = post.place_name || post.location || null;
 
               return (
@@ -714,7 +727,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      {post.author_profile?.avatar_url ? (
+                      {!post.is_seed && post.author_profile?.avatar_url ? (
                         <img
                           src={post.author_profile.avatar_url}
                           alt={authorName}
@@ -725,10 +738,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
                             isIncidentPost
                               ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
+                              : post.is_seed
+                              ? "bg-gradient-to-br from-sky-700 to-cyan-600"
                               : "bg-gradient-to-br from-slate-900 to-slate-700"
                           }`}
                         >
-                          {getAuthorInitial(post.author_profile)}
+                          {getAuthorInitial(post)}
                         </div>
                       )}
 
@@ -736,8 +751,18 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         <div className="truncate text-[15px] font-semibold text-slate-900">
                           {authorName}
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {formatDateTime(post.created_at)}
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{formatDateTime(post.published_at || post.created_at)}</span>
+                          {post.is_seed && (
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-700">
+                              平台整理
+                            </span>
+                          )}
+                          {post.is_featured && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">
+                              精選
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
