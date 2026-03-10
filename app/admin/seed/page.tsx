@@ -22,6 +22,15 @@ const CATEGORY_OPTIONS = ["店家", "商品", "旅遊", "服務", "人物/事件
 const INCIDENT_TYPES = ["詐騙", "交易糾紛", "感情雷點", "工作/求職", "其他警示"];
 const RISK_LEVELS = ["低", "中", "高"] as const;
 
+const SEED_AUTHORS = [
+  { name: "Be Calm 編輯部", slug: "becalm-editor" },
+  { name: "商品避雷整理員", slug: "product-editor" },
+  { name: "旅遊踩雷資料庫", slug: "travel-editor" },
+  { name: "餐廳避坑觀察員", slug: "food-editor" },
+  { name: "服務體驗整理站", slug: "service-editor" },
+  { name: "事件警示整理員", slug: "incident-editor" },
+];
+
 type MediaItem = {
   type: "image" | "video";
   url: string;
@@ -29,7 +38,6 @@ type MediaItem = {
 
 const ADMIN_EMAILS = [
   "liam@arinasi.com",
-  // 例如 "liang@example.com"
 ];
 
 export default function SeedAdminPage() {
@@ -50,12 +58,21 @@ export default function SeedAdminPage() {
   const [riskLevel, setRiskLevel] = useState<"低" | "中" | "高">("中");
   const [publishedAt, setPublishedAt] = useState("");
 
+  const [seedAuthorName, setSeedAuthorName] = useState(SEED_AUTHORS[0].name);
+  const [seedAuthorSlug, setSeedAuthorSlug] = useState(SEED_AUTHORS[0].slug);
+
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
 
   const [saving, setSaving] = useState(false);
 
   const isIncident = category === "人物/事件";
+
+  // 先給你穩定可用版本：
+  // 如果你之後要重新開 admin 白名單，把 true 改回下面那行即可
+  // const isAdmin =
+  //   !!user?.email &&
+  //   ADMIN_EMAILS.map((email) => email.toLowerCase()).includes(user.email.toLowerCase());
   const isAdmin = true;
 
   useEffect(() => {
@@ -70,6 +87,13 @@ export default function SeedAdminPage() {
       router.replace("/");
     }
   }, [user, loading, isAdmin, router]);
+
+  function handleAuthorChange(slug: string) {
+    const matched = SEED_AUTHORS.find((item) => item.slug === slug);
+    if (!matched) return;
+    setSeedAuthorSlug(matched.slug);
+    setSeedAuthorName(matched.name);
+  }
 
   async function compressImage(file: File) {
     const options = {
@@ -142,7 +166,7 @@ export default function SeedAdminPage() {
 
       let mediaItems: MediaItem[] = [];
 
-      // 先上傳影片，再上傳照片 → 保證顯示順序影片在前
+      // 先影片，再照片，保證前台順序影片在前
       if (videoFiles.length > 0) {
         const uploadedVideos = await uploadMultipleFiles(videoFiles, "videos", "video");
         mediaItems = [...mediaItems, ...uploadedVideos];
@@ -174,9 +198,9 @@ export default function SeedAdminPage() {
           incident_type: isIncident ? incidentType : null,
           risk_level: isIncident ? riskLevel : null,
           content_type: isIncident ? "incident" : "normal",
-          is_seed: false,
-          seed_author_name: null,
-          seed_author_slug: null,
+          is_seed: true,
+          seed_author_name: seedAuthorName,
+          seed_author_slug: seedAuthorSlug,
           source_type: "admin",
           is_featured: false,
           published_at: finalPublishedAt,
@@ -204,6 +228,8 @@ export default function SeedAdminPage() {
       setIncidentType("");
       setRiskLevel("中");
       setPublishedAt("");
+      setSeedAuthorName(SEED_AUTHORS[0].name);
+      setSeedAuthorSlug(SEED_AUTHORS[0].slug);
       setImageFiles([]);
       setVideoFiles([]);
       setSaving(false);
@@ -253,7 +279,7 @@ export default function SeedAdminPage() {
             <div>
               <h1 className="text-2xl font-black">管理員後台發文</h1>
               <p className="mt-1 text-sm text-slate-500">
-                這裡發的文會直接顯示為你的管理員帳號貼文。
+                可選擇編輯角色名稱，並上傳影片與照片。前台會先顯示影片，再顯示照片。
               </p>
             </div>
 
@@ -277,7 +303,22 @@ export default function SeedAdminPage() {
         <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-              後台發文會使用目前登入的管理員帳號顯示。可上傳影片與照片，且會先顯示影片，再顯示照片。
+              後台發文會使用目前登入的管理員帳號建立，但前台作者名稱可顯示為你選擇的角色。
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">顯示作者角色</label>
+              <select
+                value={seedAuthorSlug}
+                onChange={(e) => handleAuthorChange(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+              >
+                {SEED_AUTHORS.map((item) => (
+                  <option key={item.slug} value={item.slug}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -479,7 +520,7 @@ export default function SeedAdminPage() {
               disabled={saving}
               className="rounded-full bg-slate-900 px-6 py-3 text-white disabled:opacity-50"
             >
-              {saving ? "送出中..." : "用管理員帳號發文"}
+              {saving ? "送出中..." : "用後台角色發文"}
             </button>
           </form>
         </section>
