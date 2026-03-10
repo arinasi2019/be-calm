@@ -28,7 +28,7 @@ type MediaItem = {
 };
 
 const ADMIN_EMAILS = [
-  "你的管理員email@example.com",
+  "liam@arinasi.com",
   // 例如 "liang@example.com"
 ];
 
