@@ -49,6 +49,13 @@ export default function WritePage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
+  // 新增：親自踩坑欄位
+  const [canTry, setCanTry] = useState(false);
+  const [priceFrom, setPriceFrom] = useState("");
+  const [tryButtonLabel, setTryButtonLabel] = useState("親自踩坑");
+  const [bookingUrl, setBookingUrl] = useState("");
+  const [pitfallSummaryText, setPitfallSummaryText] = useState("");
+
   const isIncident = category === "人物/事件";
 
   useEffect(() => {
@@ -127,6 +134,12 @@ export default function WritePage() {
       }
     }
 
+    if (canTry && priceFrom.trim() !== "" && Number.isNaN(Number(priceFrom))) {
+      alert("起始價格請填數字");
+      setLoadingSubmit(false);
+      return;
+    }
+
     try {
       let mediaItems: MediaItem[] = [];
 
@@ -142,6 +155,11 @@ export default function WritePage() {
 
       const firstVideo = mediaItems.find((item) => item.type === "video")?.url || null;
       const firstImage = mediaItems.find((item) => item.type === "image")?.url || null;
+
+      const pitfallSummary = pitfallSummaryText
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
 
       const { error } = await supabase.from("posts").insert([
         {
@@ -161,6 +179,13 @@ export default function WritePage() {
           incident_type: isIncident ? incidentType : null,
           risk_level: isIncident ? riskLevel : null,
           content_type: isIncident ? "incident" : "normal",
+
+          // 親自踩坑
+          can_try: canTry,
+          booking_url: canTry ? bookingUrl || null : null,
+          price_from: canTry && priceFrom ? Number(priceFrom) : null,
+          try_button_label: canTry ? tryButtonLabel || "親自踩坑" : null,
+          pitfall_summary: canTry ? (pitfallSummary.length ? pitfallSummary : null) : null,
         },
       ]);
 
@@ -185,6 +210,13 @@ export default function WritePage() {
       setLegalConfirmed(false);
       setImageFiles([]);
       setVideoFiles([]);
+
+      setCanTry(false);
+      setPriceFrom("");
+      setTryButtonLabel("親自踩坑");
+      setBookingUrl("");
+      setPitfallSummaryText("");
+
       setLoadingSubmit(false);
 
       setTimeout(() => {
@@ -391,6 +423,75 @@ export default function WritePage() {
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                 required
               />
+            </div>
+
+            <div className="rounded-[24px] border border-orange-200 bg-orange-50/70 p-4">
+              <label className="flex items-center gap-3 text-sm font-semibold text-slate-900">
+                <input
+                  type="checkbox"
+                  checked={canTry}
+                  onChange={(e) => setCanTry(e.target.checked)}
+                />
+                開啟「親自踩坑」
+              </label>
+
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                用戶看完避坑內容後，如果還是想自己試試，就可以點進親自踩坑頁。
+              </p>
+
+              {canTry && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">起始價格</label>
+                    <input
+                      type="text"
+                      value={priceFrom}
+                      onChange={(e) => setPriceFrom(e.target.value)}
+                      placeholder="例如：1200"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">按鈕文字</label>
+                    <input
+                      type="text"
+                      value={tryButtonLabel}
+                      onChange={(e) => setTryButtonLabel(e.target.value)}
+                      placeholder="例如：親自踩坑"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">外部購買連結（可先留空）</label>
+                    <input
+                      type="url"
+                      value={bookingUrl}
+                      onChange={(e) => setBookingUrl(e.target.value)}
+                      placeholder="例如：https://..."
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">
+                      避坑提醒（一行一點）
+                    </label>
+                    <textarea
+                      value={pitfallSummaryText}
+                      onChange={(e) => setPitfallSummaryText(e.target.value)}
+                      rows={5}
+                      placeholder={`例如：
+排隊很久
+價格偏高
+主要是拍照感
+服務兩極`}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

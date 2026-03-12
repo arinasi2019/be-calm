@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PostActions from "./PostActions";
 import BottomNav from "./BottomNav";
@@ -48,6 +49,13 @@ type Post = {
   source_type?: string | null;
   is_featured?: boolean | null;
   published_at?: string | null;
+
+  // 新增：親自踩坑 / 購買頁用
+  can_try?: boolean | null;
+  booking_url?: string | null; // 若你之後想直接導外部購買頁也可用
+  price_from?: number | null;
+  try_button_label?: string | null;
+  pitfall_summary?: string[] | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -149,6 +157,45 @@ function getAuthorName(post: Post) {
 
 function getAuthorInitial(post: Post) {
   return getAuthorName(post).slice(0, 1).toUpperCase();
+}
+
+function formatPrice(price?: number | null, country?: string | null) {
+  if (price == null || Number.isNaN(price)) return null;
+
+  if (country === "日本") return `¥${price.toLocaleString("ja-JP")} 起`;
+  if (country === "台灣") return `NT$${price.toLocaleString("zh-TW")} 起`;
+  if (country === "澳洲") return `A$${price.toLocaleString("en-AU")} 起`;
+
+  return `$${price.toLocaleString()} 起`;
+}
+
+function shouldShowTrySection(post: Post) {
+  return Boolean(post.can_try || post.booking_url);
+}
+
+function getTryHref(post: Post) {
+  if (post.booking_url) return post.booking_url;
+  return `/try/${post.id}`;
+}
+
+function getTryButtonLabel(post: Post) {
+  return post.try_button_label?.trim() || "親自踩坑";
+}
+
+function getPitfallSummary(post: Post) {
+  if (Array.isArray(post.pitfall_summary) && post.pitfall_summary.length > 0) {
+    return post.pitfall_summary.filter(Boolean).slice(0, 3);
+  }
+
+  const items: string[] = [];
+
+  if (post.risk_level === "高") items.push("風險偏高，建議先看清楚內容");
+  if (post.risk_level === "中") items.push("評價偏兩極，建議先自行判斷");
+  if (post.google_maps_url) items.push("可先查看 Google 店家資訊");
+  if (post.external_url && post.category === "商品") items.push("購買前建議先比價");
+  if (post.external_url && post.category === "旅遊") items.push("預訂前建議再確認細節");
+
+  return items.slice(0, 3);
 }
 
 function ShareButtons({ post }: { post: Post }) {
@@ -493,6 +540,77 @@ function SearchModal({
                 </a>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrySection({ post }: { post: Post }) {
+  if (!shouldShowTrySection(post)) return null;
+
+  const summaryItems = getPitfallSummary(post);
+  const tryHref = getTryHref(post);
+  const priceText = formatPrice(post.price_from, post.country);
+  const buttonLabel = getTryButtonLabel(post);
+  const isExternal = Boolean(post.booking_url);
+
+  return (
+    <div className="mt-5 rounded-[24px] border border-orange-200 bg-gradient-to-br from-orange-50 via-amber-50 to-white p-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white">
+              親自踩坑
+            </span>
+
+            {priceText && (
+              <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
+                {priceText}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3 text-sm font-semibold text-slate-900">
+            看完避坑提醒，還是想自己試試？
+          </div>
+
+          <div className="mt-1 text-sm leading-6 text-slate-600">
+            你可以先看清楚風險，再決定要不要親自踩坑。
+          </div>
+
+          {summaryItems.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {summaryItems.map((item, index) => (
+                <span
+                  key={`${item}-${index}`}
+                  className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs text-slate-700"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0">
+          {isExternal ? (
+            <a
+              href={tryHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 sm:w-auto"
+            >
+              {buttonLabel}
+            </a>
+          ) : (
+            <Link
+              href={tryHref}
+              className="inline-flex w-full items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 sm:w-auto"
+            >
+              {buttonLabel}
+            </Link>
           )}
         </div>
       </div>
@@ -861,6 +979,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   </div>
 
                   <MediaRail post={post} onOpenMedia={openLightbox} />
+
+                  <TrySection post={post} />
 
                   <div className="mt-4">
                     <ShareButtons post={post} />
