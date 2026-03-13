@@ -42,17 +42,14 @@ type Post = {
   risk_level?: RiskLevel | null;
   content_type?: "normal" | "incident" | null;
   author_profile?: Profile | null;
-
   is_seed?: boolean;
   seed_author_name?: string | null;
   seed_author_slug?: string | null;
   source_type?: string | null;
   is_featured?: boolean | null;
   published_at?: string | null;
-
-  // 新增：親自踩坑 / 購買頁用
   can_try?: boolean | null;
-  booking_url?: string | null; // 若你之後想直接導外部購買頁也可用
+  booking_url?: string | null;
   price_from?: number | null;
   try_button_label?: string | null;
   pitfall_summary?: string[] | null;
@@ -478,25 +475,25 @@ function SearchModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/35 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/35 px-4 pt-24 pb-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="mx-auto mt-16 max-w-2xl rounded-[28px] bg-white shadow-2xl"
+        className="mx-auto w-full max-w-2xl rounded-[28px] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-100 p-4">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <input
               autoFocus
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="搜尋店家、商品、地點、標題、內容、事件類型..."
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+              className="min-w-0 w-full max-w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
             />
 
             <button
               onClick={onClose}
-              className="shrink-0 rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-600"
+              className="shrink-0 rounded-full border border-slate-200 px-4 py-3 text-sm text-slate-600"
             >
               關閉
             </button>
@@ -527,9 +524,7 @@ function SearchModal({
                     )}
                   </div>
 
-                  <div className="mt-1 text-xs text-slate-500">
-                    作者：{getAuthorName(post)}
-                  </div>
+                  <div className="mt-1 text-xs text-slate-500">作者：{getAuthorName(post)}</div>
 
                   <div className="mt-1 text-xs text-slate-500">
                     {post.place_name || post.location || post.category}

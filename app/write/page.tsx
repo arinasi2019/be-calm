@@ -49,7 +49,6 @@ export default function WritePage() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  // 新增：親自踩坑欄位
   const [canTry, setCanTry] = useState(false);
   const [priceFrom, setPriceFrom] = useState("");
   const [tryButtonLabel, setTryButtonLabel] = useState("親自踩坑");
@@ -179,8 +178,6 @@ export default function WritePage() {
           incident_type: isIncident ? incidentType : null,
           risk_level: isIncident ? riskLevel : null,
           content_type: isIncident ? "incident" : "normal",
-
-          // 親自踩坑
           can_try: canTry,
           booking_url: canTry ? bookingUrl || null : null,
           price_from: canTry && priceFrom ? Number(priceFrom) : null,
@@ -210,13 +207,11 @@ export default function WritePage() {
       setLegalConfirmed(false);
       setImageFiles([]);
       setVideoFiles([]);
-
       setCanTry(false);
       setPriceFrom("");
       setTryButtonLabel("親自踩坑");
       setBookingUrl("");
       setPitfallSummaryText("");
-
       setLoadingSubmit(false);
 
       setTimeout(() => {
@@ -243,7 +238,7 @@ export default function WritePage() {
       <div className="mx-auto max-w-2xl space-y-5">
         <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-black">發一篇避坑</h1>
               <p className="mt-1 text-sm text-slate-500">
                 選類別、國家、城市，讓之後的排行榜和篩選更準。
@@ -252,7 +247,7 @@ export default function WritePage() {
 
             <Link
               href="/"
-              className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
+              className="flex h-12 min-w-[96px] shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700"
             >
               回首頁
             </Link>
@@ -475,9 +470,7 @@ export default function WritePage() {
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-medium">
-                      避坑提醒（一行一點）
-                    </label>
+                    <label className="mb-2 block text-sm font-medium">避坑提醒（一行一點）</label>
                     <textarea
                       value={pitfallSummaryText}
                       onChange={(e) => setPitfallSummaryText(e.target.value)}
@@ -504,9 +497,7 @@ export default function WritePage() {
                 className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
               {imageFiles.length > 0 && (
-                <p className="mt-2 text-xs text-slate-500">
-                  已選擇 {imageFiles.length} 張照片
-                </p>
+                <p className="mt-2 text-xs text-slate-500">已選擇 {imageFiles.length} 張照片</p>
               )}
             </div>
 
@@ -520,9 +511,7 @@ export default function WritePage() {
                 className="block w-full rounded-2xl border border-slate-200 px-4 py-3"
               />
               {videoFiles.length > 0 && (
-                <p className="mt-2 text-xs text-slate-500">
-                  已選擇 {videoFiles.length} 支影片
-                </p>
+                <p className="mt-2 text-xs text-slate-500">已選擇 {videoFiles.length} 支影片</p>
               )}
             </div>
 
