@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PostActions from "./PostActions";
@@ -628,6 +628,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [hasHandledHashScroll, setHasHandledHashScroll] = useState(false);
 
+  const feedRef = useRef<HTMLElement | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const PULL_THRESHOLD = 72;
+
   useEffect(() => {
     async function loadSavedPosts() {
       if (!user) {
@@ -807,11 +814,81 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     setLightboxIndex((prev) => (prev === lightboxMedia.length - 1 ? 0 : prev + 1));
   }
 
+  function handleTouchStart(e: React.TouchEvent<HTMLElement>) {
+    if (window.scrollY > 0 || searchOpen || isRefreshing) return;
+    touchStartYRef.current = e.touches[0].clientY;
+  }
+
+  function handleTouchMove(e: React.TouchEvent<HTMLElement>) {
+    if (touchStartYRef.current == null || window.scrollY > 0 || searchOpen || isRefreshing) return;
+
+    const currentY = e.touches[0].clientY;
+    const delta = currentY - touchStartYRef.current;
+
+    if (delta <= 0) {
+      setPullDistance(0);
+      return;
+    }
+
+    const limited = Math.min(delta * 0.45, 110);
+    setPullDistance(limited);
+  }
+
+  function handleTouchEnd() {
+    if (searchOpen || isRefreshing) {
+      touchStartYRef.current = null;
+      setPullDistance(0);
+      return;
+    }
+
+    if (pullDistance >= PULL_THRESHOLD) {
+      setIsRefreshing(true);
+      setPullDistance(PULL_THRESHOLD);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 300);
+      return;
+    }
+
+    touchStartYRef.current = null;
+    setPullDistance(0);
+  }
+
   const displayPosts = sourcePosts.slice(0, visibleCount);
 
   return (
     <>
-      <section className="mb-24 space-y-5">
+      <section
+        ref={feedRef}
+        className="mb-24 space-y-5"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
+          transition: isRefreshing
+            ? "transform 0.2s ease"
+            : pullDistance > 0
+            ? "none"
+            : "transform 0.2s ease",
+        }}
+      >
+        <div
+          className="pointer-events-none -mb-2 flex h-0 items-end justify-center overflow-visible"
+          aria-hidden="true"
+        >
+          {(pullDistance > 0 || isRefreshing) && (
+            <div className="rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs font-medium text-slate-600 shadow-sm">
+              {isRefreshing
+                ? "更新中..."
+                : pullDistance >= PULL_THRESHOLD
+                ? "放開即可更新"
+                : "下拉更新"}
+            </div>
+          )}
+        </div>
+
         {savedLoading && activeTab === "saved" ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
             載入收藏中...
