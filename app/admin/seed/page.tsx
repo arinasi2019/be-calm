@@ -61,6 +61,8 @@ export default function SeedAdminPage() {
   const [seedAuthorName, setSeedAuthorName] = useState(SEED_AUTHORS[0].name);
   const [seedAuthorSlug, setSeedAuthorSlug] = useState(SEED_AUTHORS[0].slug);
 
+  const [isPersonalExperience, setIsPersonalExperience] = useState(false);
+
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFiles, setVideoFiles] = useState<File[]>([]);
 
@@ -198,6 +200,7 @@ export default function SeedAdminPage() {
           incident_type: isIncident ? incidentType : null,
           risk_level: isIncident ? riskLevel : null,
           content_type: isIncident ? "incident" : "normal",
+          is_personal_experience: isPersonalExperience,
           is_seed: true,
           seed_author_name: seedAuthorName,
           seed_author_slug: seedAuthorSlug,
@@ -230,6 +233,7 @@ export default function SeedAdminPage() {
       setPublishedAt("");
       setSeedAuthorName(SEED_AUTHORS[0].name);
       setSeedAuthorSlug(SEED_AUTHORS[0].slug);
+      setIsPersonalExperience(false);
       setImageFiles([]);
       setVideoFiles([]);
       setSaving(false);
@@ -407,6 +411,21 @@ export default function SeedAdminPage() {
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
               />
             </div>
+
+            <label className="flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={isPersonalExperience}
+                onChange={(e) => setIsPersonalExperience(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                <span className="block font-semibold text-slate-900">這篇是親自踩坑</span>
+                <span className="mt-1 block text-slate-500">
+                  勾選後，前台可顯示「親自踩坑」標章，表示這篇是親身去過、買過或用過的經驗。
+                </span>
+              </span>
+            </label>
 
             {isIncident && (
               <div className="grid gap-4 sm:grid-cols-2">
