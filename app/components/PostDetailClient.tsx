@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PostActions from "./PostActions";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "./AuthProvider";
 
 type MediaItem = {
   type: "image" | "video";
@@ -494,6 +497,9 @@ function TrySection({ post }: { post: Post }) {
 }
 
 export default function PostDetailClient({ post }: { post: Post }) {
+  const router = useRouter();
+  const { user } = useAuth();
+
   const authorName =
     post.author_profile?.display_name ||
     post.author_profile?.username ||
@@ -504,6 +510,84 @@ export default function PostDetailClient({ post }: { post: Post }) {
 
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadSavedState() {
+      if (!user) {
+        setIsSaved(false);
+        setSaveLoading(false);
+        return;
+      }
+
+      setSaveLoading(true);
+
+      const { data, error } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", user.id)
+        .eq("post_id", post.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("載入收藏狀態失敗：", error.message);
+        setIsSaved(false);
+        setSaveLoading(false);
+        return;
+      }
+
+      setIsSaved(!!data);
+      setSaveLoading(false);
+    }
+
+    loadSavedState();
+  }, [user, post.id]);
+
+  async function toggleSave() {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    if (saveLoading) return;
+
+    setSaveLoading(true);
+
+    if (isSaved) {
+      setIsSaved(false);
+
+      const { error } = await supabase
+        .from("saved_posts")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("post_id", post.id);
+
+      if (error) {
+        console.error("取消收藏失敗：", error.message);
+        setIsSaved(true);
+      }
+
+      setSaveLoading(false);
+      return;
+    }
+
+    setIsSaved(true);
+
+    const { error } = await supabase.from("saved_posts").insert([
+      {
+        user_id: user.id,
+        post_id: post.id,
+      },
+    ]);
+
+    if (error) {
+      console.error("收藏失敗：", error.message);
+      setIsSaved(false);
+    }
+
+    setSaveLoading(false);
+  }
 
   function openLightbox(mediaList: MediaItem[], index: number) {
     if (!mediaList.length) return;
@@ -528,13 +612,26 @@ export default function PostDetailClient({ post }: { post: Post }) {
     <>
       <main className="min-h-screen bg-slate-100 text-slate-900">
         <div className="mx-auto max-w-3xl px-4 py-6">
-          <div className="mb-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <Link
               href="/"
               className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
             >
               ← 回首頁
             </Link>
+
+            <button
+              type="button"
+              onClick={toggleSave}
+              disabled={saveLoading}
+              className={`rounded-full px-4 py-2 text-sm font-medium ring-1 ${
+                isSaved
+                  ? "bg-amber-100 text-amber-700 ring-amber-200"
+                  : "bg-white text-slate-700 ring-slate-200"
+              } disabled:opacity-60`}
+            >
+              {isSaved ? "已收藏" : "收藏"}
+            </button>
           </div>
 
           <article

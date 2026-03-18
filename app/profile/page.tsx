@@ -41,15 +41,41 @@ export default function ProfilePage() {
       return;
     }
 
-    async function loadProfile(userId: string) {
+    const currentUserId = user.id;
+    const currentUserEmail = user.email ?? null;
+
+    async function loadProfile() {
       const { data, error } = await supabase
         .from("profiles")
         .select("id, email, username, display_name, avatar_url")
-        .eq("id", userId)
-        .single();
+        .eq("id", currentUserId)
+        .maybeSingle();
 
       if (error) {
         console.error(error.message);
+        return;
+      }
+
+      if (!data) {
+        const defaultRow: ProfileRow = {
+          id: currentUserId,
+          email: currentUserEmail,
+          username: null,
+          display_name: null,
+          avatar_url: null,
+        };
+
+        const { error: upsertError } = await supabase.from("profiles").upsert(defaultRow);
+
+        if (upsertError) {
+          console.error(upsertError.message);
+          return;
+        }
+
+        setProfile(defaultRow);
+        setDisplayName("");
+        setUsername("");
+        setAvatarUrl("");
         return;
       }
 
@@ -60,20 +86,28 @@ export default function ProfilePage() {
       setAvatarUrl(row.avatar_url || "");
     }
 
-    loadProfile(user.id);
+    loadProfile();
   }, [user, loading, router]);
 
   async function handleUploadAvatar(file: File) {
     if (!user) return;
 
+    if (!file.type.startsWith("image/")) {
+      alert("請上傳圖片檔");
+      return;
+    }
+
     setUploading(true);
 
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/${Date.now()}.${ext}`;
+    const path = `${user.id}/avatar-${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
-      .upload(path, file, { upsert: true });
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+      });
 
     if (uploadError) {
       alert("頭像上傳失敗：" + uploadError.message);
@@ -82,12 +116,15 @@ export default function ProfilePage() {
     }
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const publicUrl = data.publicUrl;
+    const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: publicUrl })
-      .eq("id", user.id);
+    const { error: updateError } = await supabase.from("profiles").upsert({
+      id: user.id,
+      email: user.email ?? null,
+      avatar_url: publicUrl,
+      display_name: displayName.trim() || null,
+      username: username.trim() || null,
+    });
 
     if (updateError) {
       alert("更新頭像失敗：" + updateError.message);
@@ -96,8 +133,20 @@ export default function ProfilePage() {
     }
 
     setAvatarUrl(publicUrl);
-    setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : prev));
+    setProfile((prev) =>
+      prev
+        ? { ...prev, avatar_url: publicUrl }
+        : {
+            id: user.id,
+            email: user.email ?? null,
+            display_name: displayName.trim() || null,
+            username: username.trim() || null,
+            avatar_url: publicUrl,
+          }
+    );
+
     setUploading(false);
+    alert("頭像已更新");
   }
 
   async function handleSave() {
@@ -105,13 +154,13 @@ export default function ProfilePage() {
 
     setSaving(true);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        display_name: displayName.trim() || null,
-        username: username.trim() || null,
-      })
-      .eq("id", user.id);
+    const { error } = await supabase.from("profiles").upsert({
+      id: user.id,
+      email: user.email ?? null,
+      display_name: displayName.trim() || null,
+      username: username.trim() || null,
+      avatar_url: avatarUrl || null,
+    });
 
     setSaving(false);
 
@@ -125,10 +174,18 @@ export default function ProfilePage() {
       prev
         ? {
             ...prev,
+            email: user.email ?? null,
             display_name: displayName.trim() || null,
             username: username.trim() || null,
+            avatar_url: avatarUrl || null,
           }
-        : prev
+        : {
+            id: user.id,
+            email: user.email ?? null,
+            display_name: displayName.trim() || null,
+            username: username.trim() || null,
+            avatar_url: avatarUrl || null,
+          }
     );
   }
 

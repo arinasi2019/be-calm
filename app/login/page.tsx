@@ -21,14 +21,24 @@ export default function LoginPage() {
 
     try {
       if (isRegister) {
+        const redirectTo =
+          typeof window !== "undefined"
+            ? `${window.location.origin}/`
+            : "https://becalm.social/";
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: redirectTo,
+          },
         });
 
         if (error) throw error;
 
-        alert("註冊成功，請查看你的 Email 驗證信。");
+        alert("註冊成功，請查看你的 Email 驗證信。驗證後可回到首頁登入。");
+        router.push("/");
+        router.refresh();
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -70,7 +80,7 @@ export default function LoginPage() {
               {isRegister ? "加入會員" : "會員登入"}
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              想發文、留言、回覆時，再登入就可以。
+              想發文、留言、回覆、收藏時，再登入就可以。
             </p>
           </div>
 
