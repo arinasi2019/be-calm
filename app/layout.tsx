@@ -5,10 +5,15 @@ import AuthProvider from "./components/AuthProvider";
 export const metadata: Metadata = {
   title: "避坑 Be Calm",
   description: "反推薦平台，分享真實踩雷、避坑心得、雷店、雷商品、雷服務。",
+
+  verification: {
+    google: "vuqPO-kfjzr9cROxWvZbambsDcIcxbCWEsOESUWVNUo",
+  },
+
   openGraph: {
     title: "避坑 Be Calm",
     description: "反推薦平台，分享真實踩雷、避坑心得、雷店、雷商品、雷服務。",
-    url: "https://be-calm-kappa.vercel.app/",
+    url: "https://becalm.social/",
     siteName: "避坑 Be Calm",
     images: [
       {
@@ -21,6 +26,7 @@ export const metadata: Metadata = {
     locale: "zh_TW",
     type: "website",
   },
+
   twitter: {
     card: "summary_large_image",
     title: "避坑 Be Calm",
