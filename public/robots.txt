@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://becalm.social/sitemap.xml

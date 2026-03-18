@@ -198,8 +198,8 @@ function getPitfallSummary(post: Post) {
 function ShareButtons({ post }: { post: Post }) {
   const shareUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/#post-${post.id}`
-      : `/#post-${post.id}`;
+      ? `${window.location.origin}/post/${post.id}`
+      : `/post/${post.id}`;
 
   const shareText = `${post.title}｜避坑 Be Calm`;
 
@@ -213,7 +213,7 @@ function ShareButtons({ post }: { post: Post }) {
         });
       } else {
         await navigator.clipboard.writeText(shareUrl);
-        alert("連結已複製");
+        alert("文章連結已複製");
       }
     } catch {}
   }
@@ -475,7 +475,7 @@ function SearchModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/35 px-4 pt-24 pb-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/35 px-4 pb-4 pt-24 backdrop-blur-sm" onClick={onClose}>
       <div
         className="mx-auto w-full max-w-2xl rounded-[28px] bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -508,9 +508,9 @@ function SearchModal({
           ) : (
             <div className="space-y-3">
               {results.map((post) => (
-                <a
+                <Link
                   key={post.id}
-                  href={`#post-${post.id}`}
+                  href={`/post/${post.id}`}
                   onClick={onClose}
                   className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
                 >
@@ -532,7 +532,7 @@ function SearchModal({
                   </div>
 
                   <div className="mt-2 line-clamp-2 text-sm text-slate-600">{post.content}</div>
-                </a>
+                </Link>
               ))}
             </div>
           )}
@@ -1029,7 +1029,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     </div>
                   )}
 
-                  <h2 className="mt-4 text-2xl font-black text-slate-900">{post.title}</h2>
+                  <Link href={`/post/${post.id}`} className="mt-4 block">
+                    <h2 className="text-2xl font-black text-slate-900 hover:text-slate-700">
+                      {post.title}
+                    </h2>
+                  </Link>
 
                   <div className="mt-3">
                     <p
@@ -1054,8 +1058,14 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                   <TrySection post={post} />
 
-                  <div className="mt-4">
+                  <div className="mt-4 flex items-center gap-4">
                     <ShareButtons post={post} />
+                    <Link
+                      href={`/post/${post.id}`}
+                      className="text-sm font-medium text-slate-500 hover:text-slate-900"
+                    >
+                      查看文章頁
+                    </Link>
                   </div>
 
                   <PostActions postId={post.id} />
