@@ -97,7 +97,7 @@ function RankingBlock({
           {posts.map((post, index) => (
             <a
               key={post.id}
-              href={`#post-${post.id}`}
+              href={`/post/${post.id}`}
               className="block rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100"
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -167,12 +167,12 @@ export default function HomePage() {
         supabase.from("comments").select("id, post_id"),
       ]);
 
-      const rawPosts = ((postsRes.data as Post[]) || []);
+      const rawPosts = (postsRes.data as Post[]) || [];
       const userIds = Array.from(
         new Set(rawPosts.map((post) => post.user_id).filter(Boolean) as string[])
       );
 
-      let profileMap: Record<string, Profile> = {};
+      const profileMap: Record<string, Profile> = {};
 
       if (userIds.length > 0) {
         const profilesRes = await supabase
