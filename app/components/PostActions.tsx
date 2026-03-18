@@ -673,13 +673,7 @@ export default function PostActions({ postId }: { postId: number }) {
                                     [comment.id]: e.target.value,
                                   }))
                                 }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSubmitReply(comment.id);
-                                  }
-                                }}
-                                placeholder="回覆這則留言...（Enter 送出，Shift+Enter 換行）"
+                                placeholder="回覆這則留言..."
                                 rows={2}
                                 className="min-h-[48px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
                               />
@@ -762,13 +756,7 @@ export default function PostActions({ postId }: { postId: number }) {
                       <textarea
                         value={commentText}
                         onChange={(e) => setCommentText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSubmitComment();
-                          }
-                        }}
-                        placeholder="寫下你的留言...（Enter 送出，Shift+Enter 換行）"
+                        placeholder="寫下你的留言..."
                         rows={2}
                         className="min-h-[52px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none"
                       />
