@@ -58,6 +58,8 @@ type RankedPost = Post & {
   trendScore: number;
 };
 
+type FeedMode = "推薦" | "最新" | "最熱" | "爆雷中";
+
 function getHoursAgo(dateString: string | null) {
   if (!dateString) return 999999;
   const created = new Date(dateString).getTime();
@@ -75,6 +77,10 @@ function getTrendScore(post: Post, pitCount: number, commentCount: number) {
   return (pitCount * 8 + commentCount * 3) / Math.pow(hoursAgo + 2, 0.8);
 }
 
+function formatPostMeta(post: RankedPost) {
+  return [post.category, post.country, post.city].filter(Boolean).join("・");
+}
+
 function RankingBlock({
   title,
   colorClass,
@@ -87,8 +93,13 @@ function RankingBlock({
   metricLabel: "坑" | "留言" | "熱度";
 }) {
   return (
-    <div className="rounded-[24px] bg-white p-4 shadow-sm ring-1 ring-slate-200/70">
-      <h3 className={`text-base font-black ${colorClass}`}>{title}</h3>
+    <div className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h3 className={`text-base font-black ${colorClass}`}>{title}</h3>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+          Top 5
+        </span>
+      </div>
 
       {posts.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">目前沒有資料</p>
@@ -98,54 +109,74 @@ function RankingBlock({
             <a
               key={post.id}
               href={`/post/${post.id}`}
-              className="block rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100"
+              className="block rounded-2xl border border-slate-100 bg-slate-50 p-3 transition hover:border-slate-200 hover:bg-slate-100"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-bold text-slate-900">
-                  #{index + 1} {post.title}
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                  {index + 1}
                 </div>
 
-                {post.category === "人物/事件" && (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
-                    人物 / 事件
-                  </span>
-                )}
-              </div>
+                <div className="min-w-0 flex-1">
+                  <div className="line-clamp-2 text-sm font-bold leading-5 text-slate-900">
+                    {post.title}
+                  </div>
 
-              <div className="mt-1 text-xs text-slate-500">
-                {[post.category, post.country, post.city].filter(Boolean).join("・")}
-                {post.incident_type ? `・${post.incident_type}` : ""}
-              </div>
+                  <div className="mt-1 line-clamp-1 text-xs text-slate-500">
+                    {formatPostMeta(post)}
+                    {post.incident_type ? `・${post.incident_type}` : ""}
+                  </div>
 
-              <div className="mt-2 flex flex-wrap gap-2">
-                {metricLabel === "坑" && (
-                  <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                    坑 {post.pitCount}
-                  </span>
-                )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {metricLabel === "坑" && (
+                      <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                        坑 {post.pitCount}
+                      </span>
+                    )}
 
-                {metricLabel === "留言" && (
-                  <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
-                    留言 {post.commentCount}
-                  </span>
-                )}
+                    {metricLabel === "留言" && (
+                      <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                        留言 {post.commentCount}
+                      </span>
+                    )}
 
-                {metricLabel === "熱度" && (
-                  <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
-                    熱度 {post.trendScore.toFixed(1)}
-                  </span>
-                )}
+                    {metricLabel === "熱度" && (
+                      <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                        熱度 {post.trendScore.toFixed(1)}
+                      </span>
+                    )}
 
-                {post.category === "人物/事件" && post.risk_level && (
-                  <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
-                    風險 {post.risk_level}
-                  </span>
-                )}
+                    {post.category === "人物/事件" && post.risk_level && (
+                      <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+                        風險 {post.risk_level}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </a>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function MiniFeedCard({
+  title,
+  subtitle,
+  value,
+}: {
+  title: string;
+  subtitle: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/8 p-4 backdrop-blur-sm">
+      <div className="text-[11px] font-semibold tracking-wide text-slate-300 uppercase">
+        {title}
+      </div>
+      <div className="mt-2 text-2xl font-black text-white">{value}</div>
+      <div className="mt-1 text-xs text-slate-400">{subtitle}</div>
     </div>
   );
 }
@@ -158,6 +189,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [selectedCountry, setSelectedCountry] = useState("全部");
   const [selectedCity, setSelectedCity] = useState("全部");
+  const [feedMode, setFeedMode] = useState<FeedMode>("推薦");
 
   useEffect(() => {
     async function load() {
@@ -252,167 +284,299 @@ export default function HomePage() {
       const matchCategory = selectedCategory === "全部" || post.category === selectedCategory;
       const matchCountry = selectedCountry === "全部" || post.country === selectedCountry;
       const matchCity = selectedCity === "全部" || post.city === selectedCity;
-
       return matchCategory && matchCountry && matchCity;
     });
   }, [postsWithStats, selectedCategory, selectedCountry, selectedCity]);
 
-  const allTimeHot = [...filteredPosts]
-    .sort((a, b) => b.pitCount - a.pitCount || b.hotScore - a.hotScore)
-    .slice(0, 5);
+  const allTimeHot = useMemo(
+    () =>
+      [...filteredPosts]
+        .sort((a, b) => b.pitCount - a.pitCount || b.hotScore - a.hotScore)
+        .slice(0, 5),
+    [filteredPosts]
+  );
 
-  const latestPosts = [...filteredPosts]
-    .sort((a, b) => {
-      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return bt - at;
-    })
-    .slice(0, 5);
+  const latestPosts = useMemo(
+    () =>
+      [...filteredPosts]
+        .sort((a, b) => {
+          const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bt - at;
+        })
+        .slice(0, 5),
+    [filteredPosts]
+  );
 
-  const mostDiscussed = [...filteredPosts]
-    .sort((a, b) => b.commentCount - a.commentCount || b.hotScore - a.hotScore)
-    .slice(0, 5);
+  const mostDiscussed = useMemo(
+    () =>
+      [...filteredPosts]
+        .sort((a, b) => b.commentCount - a.commentCount || b.hotScore - a.hotScore)
+        .slice(0, 5),
+    [filteredPosts]
+  );
 
-  const trending = [...filteredPosts]
-    .sort((a, b) => b.trendScore - a.trendScore)
-    .slice(0, 5);
+  const trending = useMemo(
+    () => [...filteredPosts].sort((a, b) => b.trendScore - a.trendScore).slice(0, 5),
+    [filteredPosts]
+  );
+
+  const displayPosts = useMemo(() => {
+    const sorted = [...filteredPosts];
+
+    if (feedMode === "最新") {
+      return sorted.sort((a, b) => {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bt - at;
+      });
+    }
+
+    if (feedMode === "最熱") {
+      return sorted.sort((a, b) => b.hotScore - a.hotScore);
+    }
+
+    if (feedMode === "爆雷中") {
+      return sorted.sort((a, b) => b.trendScore - a.trendScore);
+    }
+
+    return sorted.sort((a, b) => {
+      const scoreA = a.hotScore * 0.55 + a.trendScore * 0.45;
+      const scoreB = b.hotScore * 0.55 + b.trendScore * 0.45;
+      return scoreB - scoreA;
+    });
+  }, [filteredPosts, feedMode]);
+
+  const totalPitCount = useMemo(
+    () => filteredPosts.reduce((sum, post) => sum + post.pitCount, 0),
+    [filteredPosts]
+  );
+
+  const totalCommentCount = useMemo(
+    () => filteredPosts.reduce((sum, post) => sum + post.commentCount, 0),
+    [filteredPosts]
+  );
+
+  const filterSummary = [selectedCategory, selectedCountry, selectedCity].join(" / ");
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="mx-auto max-w-3xl px-4 py-5 sm:py-6">
+    <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
         <SiteHeader />
 
-        <section className="mb-5 rounded-[32px] bg-gradient-to-br from-[#111827] via-[#0f172a] to-[#1e293b] px-6 py-8 text-white shadow-xl">
-          <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs ring-1 ring-white/10">
-            年輕人的反推薦平台
-          </div>
+        <section className="mb-5 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+          <div className="px-5 py-6 sm:px-7 sm:py-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
+                  不種草，只避雷
+                </div>
 
-          <h1 className="mt-4 text-4xl font-black leading-tight sm:text-5xl">
-            先冷靜，
-            <br />
-            再花錢。
-          </h1>
+                <h1 className="mt-4 text-3xl font-black leading-tight sm:text-5xl">
+                  今天又有誰，
+                  <br className="hidden sm:block" />
+                  出來爆雷了？
+                </h1>
 
-          <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
-            分享真實踩雷、避坑心得、雷店、雷商品、雷服務，也可以分享人物 / 事件警示。
-            在花錢前，先看大家踩過哪些坑。
-          </p>
-        </section>
-
-        <section className="mb-3">
-          <div className="mb-2 text-xs font-semibold text-slate-500">類別</div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {categories.map((item) => (
-              <button
-                key={item}
-                onClick={() => setSelectedCategory(item)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
-                  selectedCategory === item
-                    ? "bg-slate-900 text-white"
-                    : "bg-white text-slate-700 ring-1 ring-slate-200"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-3">
-          <div className="mb-2 text-xs font-semibold text-slate-500">國家</div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {countries.map((item) => (
-              <button
-                key={item}
-                onClick={() => {
-                  setSelectedCountry(item);
-                  setSelectedCity("全部");
-                }}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
-                  selectedCountry === item
-                    ? "bg-slate-900 text-white"
-                    : "bg-white text-slate-700 ring-1 ring-slate-200"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-6">
-          <div className="mb-2 text-xs font-semibold text-slate-500">城市</div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {cities.map((item) => (
-              <button
-                key={item}
-                onClick={() => setSelectedCity(item)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm ${
-                  selectedCity === item
-                    ? "bg-slate-900 text-white"
-                    : "bg-white text-slate-700 ring-1 ring-slate-200"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-6 rounded-[32px] bg-slate-200/70 p-3 sm:p-4">
-          <div className="mb-3 px-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">避坑排行榜</h2>
-                <p className="text-xs text-slate-500">
-                  目前篩選：{selectedCategory} / {selectedCountry} / {selectedCity}
+                <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+                  看大家最近在吵什麼、踩了哪些坑、哪些店被狂刷坑+1。
+                  BeCalm 首頁不只是搜尋，而是直接刷最新避坑動態。
                 </p>
               </div>
 
-              <div className="md:hidden rounded-full bg-white/70 px-3 py-1 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">
-                ← 左右滑動查看 →
+              <div className="grid w-full max-w-xl grid-cols-3 gap-3">
+                <MiniFeedCard
+                  title="目前貼文"
+                  value={filteredPosts.length.toString()}
+                  subtitle="符合目前篩選條件"
+                />
+                <MiniFeedCard
+                  title="總坑數"
+                  value={totalPitCount.toString()}
+                  subtitle="大家一起踩過的坑"
+                />
+                <MiniFeedCard
+                  title="總留言"
+                  value={totalCommentCount.toString()}
+                  subtitle="正在發酵的討論"
+                />
               </div>
             </div>
           </div>
 
-          <div className="md:hidden">
-            <div className="-mx-1 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex snap-x snap-mandatory gap-3 px-1">
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
-                </div>
+          <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {(["推薦", "最新", "最熱", "爆雷中"] as FeedMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setFeedMode(mode)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      feedMode === mode
+                        ? "bg-white text-slate-900"
+                        : "bg-white/8 text-slate-200 ring-1 ring-white/10 hover:bg-white/12"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
 
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
-                </div>
-
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
-                </div>
-
-                <div className="min-w-[84%] snap-center">
-                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
-                </div>
+              <div className="text-xs text-slate-300">
+                正在查看：<span className="font-bold text-white">{feedMode}</span> ・ {filterSummary}
               </div>
             </div>
-
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-slate-400" />
-              <span className="h-2 w-2 rounded-full bg-slate-300" />
-              <span className="h-2 w-2 rounded-full bg-slate-300" />
-              <span className="h-2 w-2 rounded-full bg-slate-300" />
-            </div>
-          </div>
-
-          <div className="hidden gap-4 md:grid md:grid-cols-2">
-            <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
-            <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
-            <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
-            <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
           </div>
         </section>
 
-        <PostFeed posts={filteredPosts} />
+        <section className="sticky top-[68px] z-20 mb-4 rounded-[28px] border border-slate-200 bg-white/88 p-3 shadow-sm backdrop-blur-md">
+          <div className="space-y-3">
+            <div>
+              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
+                類別
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {categories.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setSelectedCategory(item)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                      selectedCategory === item
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
+                國家
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {countries.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => {
+                      setSelectedCountry(item);
+                      setSelectedCity("全部");
+                    }}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                      selectedCountry === item
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
+                城市
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {cities.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => setSelectedCity(item)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                      selectedCity === item
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
+                  {feedMode}動態
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  首頁現在是內容流，不是靜態列表。先刷，再決定要不要點進去。
+                </p>
+              </div>
+
+              <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
+                共 {displayPosts.length} 篇
+              </div>
+            </div>
+
+            <PostFeed posts={displayPosts} />
+          </section>
+
+          <aside className="space-y-4">
+            <div className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-black text-slate-900">首頁節奏</h3>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                  Social Feed
+                </span>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-500">現在你在刷</div>
+                  <div className="mt-1 text-sm font-bold text-slate-900">{feedMode}</div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-500">篩選條件</div>
+                  <div className="mt-1 text-sm font-bold text-slate-900">{filterSummary}</div>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-500">目前感覺</div>
+                  <div className="mt-1 text-sm font-bold text-slate-900">
+                    比較像社群，不像資料庫
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <RankingBlock
+              title="🔥 全站最坑"
+              colorClass="text-rose-600"
+              posts={allTimeHot}
+              metricLabel="坑"
+            />
+
+            <RankingBlock
+              title="💬 討論最多"
+              colorClass="text-sky-600"
+              posts={mostDiscussed}
+              metricLabel="留言"
+            />
+
+            <RankingBlock
+              title="⚡ 最近爆雷"
+              colorClass="text-amber-600"
+              posts={trending}
+              metricLabel="熱度"
+            />
+
+            <RankingBlock
+              title="🆕 最新踩雷"
+              colorClass="text-slate-900"
+              posts={latestPosts}
+              metricLabel="坑"
+            />
+          </aside>
+        </div>
       </div>
     </main>
   );

@@ -195,6 +195,15 @@ function getPitfallSummary(post: Post) {
   return items.slice(0, 3);
 }
 
+function getLeadText(post: Post) {
+  const raw = post.content?.trim() || "";
+  if (!raw) return "";
+
+  const cleaned = raw.replace(/\n+/g, " ").trim();
+  if (cleaned.length <= 68) return cleaned;
+  return `${cleaned.slice(0, 68)}...`;
+}
+
 function ShareButtons({ post }: { post: Post }) {
   const shareUrl =
     typeof window !== "undefined"
@@ -379,13 +388,13 @@ function MediaRail({
     const media = mediaList[0];
 
     return (
-      <div className="pt-2">
-        <div className="overflow-hidden rounded-[22px]">
+      <div className="mt-4">
+        <div className="overflow-hidden rounded-[24px] bg-slate-100">
           {media.type === "image" ? (
             <img
               src={media.url}
               alt={post.title}
-              className="h-72 w-full cursor-zoom-in object-cover"
+              className="h-80 w-full cursor-zoom-in object-cover sm:h-[430px]"
               onClick={() => onOpenMedia(mediaList, 0)}
             />
           ) : (
@@ -394,7 +403,7 @@ function MediaRail({
               controls
               playsInline
               preload="metadata"
-              className="h-72 w-full bg-black object-cover"
+              className="h-80 w-full bg-black object-cover sm:h-[430px]"
             />
           )}
         </div>
@@ -403,7 +412,7 @@ function MediaRail({
   }
 
   return (
-    <div className="pt-2">
+    <div className="mt-4">
       <div className="mb-2 flex items-center justify-between px-1">
         <div className="text-xs font-medium text-slate-500">共 {mediaList.length} 項媒體</div>
         <div className="text-[11px] text-slate-400">左右滑動查看更多 →</div>
@@ -414,13 +423,13 @@ function MediaRail({
           {mediaList.map((media, index) => (
             <div
               key={`${media.url}-${index}`}
-              className="relative w-[85%] shrink-0 snap-center overflow-hidden rounded-[20px] sm:w-[320px]"
+              className="relative w-[86%] shrink-0 snap-center overflow-hidden rounded-[22px] bg-slate-100 sm:w-[360px]"
             >
               {media.type === "image" ? (
                 <img
                   src={media.url}
                   alt={`${post.title}-${index}`}
-                  className="h-64 w-full cursor-zoom-in object-cover"
+                  className="h-72 w-full cursor-zoom-in object-cover sm:h-80"
                   onClick={() => onOpenMedia(mediaList, index)}
                 />
               ) : (
@@ -430,9 +439,9 @@ function MediaRail({
                     controls
                     playsInline
                     preload="metadata"
-                    className="h-64 w-full bg-black object-cover"
+                    className="h-72 w-full bg-black object-cover sm:h-80"
                   />
-                  <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold text-white">
+                  <div className="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-bold text-white">
                     VIDEO
                   </div>
                 </>
@@ -608,6 +617,30 @@ function TrySection({ post }: { post: Post }) {
             </Link>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickSummary({ post }: { post: Post }) {
+  const summaryItems = getPitfallSummary(post);
+
+  if (!summaryItems.length) return null;
+
+  return (
+    <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-2 text-xs font-black tracking-wide text-slate-500 uppercase">
+        避坑重點
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {summaryItems.map((item, index) => (
+          <span
+            key={`${item}-${index}`}
+            className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+          >
+            {item}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -861,7 +894,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     <>
       <section
         ref={feedRef}
-        className="mb-24 space-y-5"
+        className="mb-24 space-y-6"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -903,15 +936,16 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const isSaved = savedIds.includes(post.id);
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
               const isExpanded = expandedPostIds.includes(post.id);
-              const shouldTruncate = post.content.length > 140;
+              const shouldTruncate = post.content.length > 160;
               const authorName = getAuthorName(post);
               const displayPlace = post.place_name || post.location || null;
+              const leadText = getLeadText(post);
 
               return (
                 <article
                   id={`post-${post.id}`}
                   key={post.id}
-                  className={`rounded-[28px] border bg-white p-5 shadow-sm transition hover:shadow-md ${
+                  className={`overflow-hidden rounded-[30px] border bg-white p-5 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md sm:p-6 ${
                     isIncidentPost ? "border-rose-200" : "border-slate-200"
                   }`}
                 >
@@ -921,11 +955,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         <img
                           src={post.author_profile.avatar_url}
                           alt={authorName}
-                          className="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                          className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
                         />
                       ) : (
                         <div
-                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
                             isIncidentPost
                               ? "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
                               : post.is_seed
@@ -941,13 +975,16 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         <div className="truncate text-[15px] font-semibold text-slate-900">
                           {authorName}
                         </div>
+
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span>{formatDateTime(post.published_at || post.created_at)}</span>
+
                           {post.is_seed && (
                             <span className="rounded-full bg-sky-100 px-2 py-0.5 font-medium text-sky-700">
                               平台整理
                             </span>
                           )}
+
                           {post.is_featured && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700">
                               精選
@@ -959,26 +996,28 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                     <button
                       onClick={() => toggleSave(post.id)}
-                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium ${
-                        isSaved ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                        isSaved
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                     >
                       {isSaved ? "已收藏" : "收藏"}
                     </button>
                   </div>
 
-                  {displayPlace && (
-                    <div className="mt-4 text-sm font-semibold text-slate-800">
-                      {displayPlace}
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {getCategoryBadge(post)}
 
                     {formatLocation(post) && (
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
                         {getCountryFlag(post.country)} {formatLocation(post)}
+                      </span>
+                    )}
+
+                    {displayPlace && (
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                        📌 {displayPlace}
                       </span>
                     )}
 
@@ -1009,8 +1048,20 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     )}
                   </div>
 
+                  <Link href={`/post/${post.id}`} className="mt-4 block">
+                    <h2 className="text-[28px] font-black leading-tight tracking-[-0.02em] text-slate-900 hover:text-slate-700 sm:text-[32px]">
+                      {post.title}
+                    </h2>
+                  </Link>
+
+                  {leadText && (
+                    <p className="mt-3 text-[15px] font-medium leading-7 text-slate-600">
+                      {leadText}
+                    </p>
+                  )}
+
                   {isIncidentPost && (post.incident_type || post.risk_level) && (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {post.incident_type && (
                         <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700">
                           類型：{post.incident_type}
@@ -1029,16 +1080,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     </div>
                   )}
 
-                  <Link href={`/post/${post.id}`} className="mt-4 block">
-                    <h2 className="text-2xl font-black text-slate-900 hover:text-slate-700">
-                      {post.title}
-                    </h2>
-                  </Link>
+                  <QuickSummary post={post} />
 
-                  <div className="mt-3">
+                  <div className="mt-4">
                     <p
                       className={`whitespace-pre-wrap text-sm leading-7 text-slate-700 ${
-                        !isExpanded && shouldTruncate ? "line-clamp-4" : ""
+                        !isExpanded && shouldTruncate ? "line-clamp-5" : ""
                       }`}
                     >
                       {post.content}
@@ -1058,7 +1105,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                   <TrySection post={post} />
 
-                  <div className="mt-4 flex items-center gap-4">
+                  <div className="mt-5 flex items-center gap-4 border-t border-slate-100 pt-4">
                     <ShareButtons post={post} />
                     <Link
                       href={`/post/${post.id}`}

@@ -52,7 +52,7 @@ export default function ProfilePage() {
         .maybeSingle();
 
       if (error) {
-        console.error(error.message);
+        console.error("load profile error:", error);
         return;
       }
 
@@ -68,7 +68,7 @@ export default function ProfilePage() {
         const { error: upsertError } = await supabase.from("profiles").upsert(defaultRow);
 
         if (upsertError) {
-          console.error(upsertError.message);
+          console.error("create default profile error:", upsertError);
           return;
         }
 
@@ -100,7 +100,7 @@ export default function ProfilePage() {
     setUploading(true);
 
     const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+    const path = `${user.id}/avatar.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
@@ -110,6 +110,7 @@ export default function ProfilePage() {
       });
 
     if (uploadError) {
+      console.error("avatar upload error:", uploadError);
       alert("頭像上傳失敗：" + uploadError.message);
       setUploading(false);
       return;
@@ -127,6 +128,7 @@ export default function ProfilePage() {
     });
 
     if (updateError) {
+      console.error("profile avatar update error:", updateError);
       alert("更新頭像失敗：" + updateError.message);
       setUploading(false);
       return;
@@ -165,6 +167,7 @@ export default function ProfilePage() {
     setSaving(false);
 
     if (error) {
+      console.error("profile save error:", error);
       alert("儲存失敗：" + error.message);
       return;
     }
