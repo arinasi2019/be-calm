@@ -93,10 +93,10 @@ function RankingBlock({
   metricLabel: "坑" | "留言" | "熱度";
 }) {
   return (
-    <div className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className={`text-base font-black ${colorClass}`}>{title}</h3>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+        <h3 className={`text-sm font-black ${colorClass}`}>{title}</h3>
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
           Top 5
         </span>
       </div>
@@ -104,7 +104,7 @@ function RankingBlock({
       {posts.length === 0 ? (
         <p className="mt-3 text-sm text-slate-400">目前沒有資料</p>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-3">
           {posts.map((post, index) => (
             <a
               key={post.id}
@@ -112,7 +112,7 @@ function RankingBlock({
               className="block rounded-2xl border border-slate-100 bg-slate-50 p-3 transition hover:border-slate-200 hover:bg-slate-100"
             >
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-black text-white">
                   {index + 1}
                 </div>
 
@@ -128,26 +128,20 @@ function RankingBlock({
 
                   <div className="mt-2 flex flex-wrap gap-2">
                     {metricLabel === "坑" && (
-                      <span className="inline-flex rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
+                      <span className="inline-flex rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
                         坑 {post.pitCount}
                       </span>
                     )}
 
                     {metricLabel === "留言" && (
-                      <span className="inline-flex rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                      <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
                         留言 {post.commentCount}
                       </span>
                     )}
 
                     {metricLabel === "熱度" && (
-                      <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                      <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
                         熱度 {post.trendScore.toFixed(1)}
-                      </span>
-                    )}
-
-                    {post.category === "人物/事件" && post.risk_level && (
-                      <span className="inline-flex rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
-                        風險 {post.risk_level}
                       </span>
                     )}
                   </div>
@@ -361,12 +355,12 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
+      <div className="mx-auto max-w-4xl px-4 py-4 sm:px-5 sm:py-6">
         <SiteHeader />
 
-        <section className="mb-5 overflow-hidden rounded-[32px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+        <section className="mb-5 overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
           <div className="px-5 py-6 sm:px-7 sm:py-7">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-5">
               <div className="max-w-2xl">
                 <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
                   不種草，只避雷
@@ -384,7 +378,7 @@ export default function HomePage() {
                 </p>
               </div>
 
-              <div className="grid w-full max-w-xl grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <MiniFeedCard
                   title="目前貼文"
                   value={filteredPosts.length.toString()}
@@ -405,7 +399,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {(["推薦", "最新", "最熱", "爆雷中"] as FeedMode[]).map((mode) => (
                   <button
@@ -429,77 +423,96 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="sticky top-[68px] z-20 mb-4 rounded-[28px] border border-slate-200 bg-white/88 p-3 shadow-sm backdrop-blur-md">
-          <div className="space-y-3">
-            <div>
-              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
-                類別
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {categories.map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => setSelectedCategory(item)}
-                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-                      selectedCategory === item
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+        <section className="sticky top-[60px] z-20 mb-4 rounded-[24px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <span className="shrink-0 text-[11px] font-bold text-slate-400">類別</span>
+              {categories.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setSelectedCategory(item)}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    selectedCategory === item
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
             </div>
 
-            <div>
-              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
-                國家
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {countries.map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => {
-                      setSelectedCountry(item);
-                      setSelectedCity("全部");
-                    }}
-                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
-                      selectedCountry === item
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <span className="shrink-0 text-[11px] font-bold text-slate-400">地區</span>
+              {countries.map((item) => (
+                <button
+                  key={item}
+                  onClick={() => {
+                    setSelectedCountry(item);
+                    setSelectedCity("全部");
+                  }}
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    selectedCountry === item
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {item}
+                </button>
+              ))}
             </div>
 
-            <div>
-              <div className="mb-2 text-[11px] font-bold tracking-wide text-slate-500 uppercase">
-                城市
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {cities.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <span className="shrink-0 text-[11px] font-bold text-slate-400">城市</span>
                 {cities.map((item) => (
                   <button
                     key={item}
                     onClick={() => setSelectedCity(item)}
-                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       selectedCity === item
                         ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     {item}
                   </button>
                 ))}
               </div>
-            </div>
+            )}
           </div>
         </section>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-4">
+          <section className="rounded-[26px] border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-900">避坑排行榜</h3>
+                <p className="text-xs text-slate-500">更像 app，一樣可以快速刷熱門</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                左右滑動
+              </span>
+            </div>
+
+            <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-3 px-1">
+                <div className="w-[280px] shrink-0">
+                  <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
+                </div>
+                <div className="w-[280px] shrink-0">
+                  <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
+                </div>
+                <div className="w-[280px] shrink-0">
+                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
+                </div>
+                <div className="w-[280px] shrink-0">
+                  <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
+                </div>
+              </div>
+            </div>
+          </section>
+
           <section className="min-w-0">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -507,7 +520,7 @@ export default function HomePage() {
                   {feedMode}動態
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  首頁現在是內容流，不是靜態列表。先刷，再決定要不要點進去。
+                  先刷內容，再決定要不要點進去。
                 </p>
               </div>
 
@@ -518,64 +531,6 @@ export default function HomePage() {
 
             <PostFeed posts={displayPosts} />
           </section>
-
-          <aside className="space-y-4">
-            <div className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-black text-slate-900">首頁節奏</h3>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                  Social Feed
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs font-bold text-slate-500">現在你在刷</div>
-                  <div className="mt-1 text-sm font-bold text-slate-900">{feedMode}</div>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs font-bold text-slate-500">篩選條件</div>
-                  <div className="mt-1 text-sm font-bold text-slate-900">{filterSummary}</div>
-                </div>
-
-                <div className="rounded-2xl bg-slate-50 p-3">
-                  <div className="text-xs font-bold text-slate-500">目前感覺</div>
-                  <div className="mt-1 text-sm font-bold text-slate-900">
-                    比較像社群，不像資料庫
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <RankingBlock
-              title="🔥 全站最坑"
-              colorClass="text-rose-600"
-              posts={allTimeHot}
-              metricLabel="坑"
-            />
-
-            <RankingBlock
-              title="💬 討論最多"
-              colorClass="text-sky-600"
-              posts={mostDiscussed}
-              metricLabel="留言"
-            />
-
-            <RankingBlock
-              title="⚡ 最近爆雷"
-              colorClass="text-amber-600"
-              posts={trending}
-              metricLabel="熱度"
-            />
-
-            <RankingBlock
-              title="🆕 最新踩雷"
-              colorClass="text-slate-900"
-              posts={latestPosts}
-              metricLabel="坑"
-            />
-          </aside>
         </div>
       </div>
     </main>

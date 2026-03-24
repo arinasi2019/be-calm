@@ -389,12 +389,12 @@ function MediaRail({
 
     return (
       <div className="mt-4">
-        <div className="overflow-hidden rounded-[24px] bg-slate-100">
+        <div className="overflow-hidden rounded-[24px] bg-slate-100 ring-1 ring-slate-200">
           {media.type === "image" ? (
             <img
               src={media.url}
               alt={post.title}
-              className="h-80 w-full cursor-zoom-in object-cover sm:h-[430px]"
+              className="block h-[320px] w-full cursor-zoom-in object-cover sm:h-[420px] lg:h-[520px]"
               onClick={() => onOpenMedia(mediaList, 0)}
             />
           ) : (
@@ -403,7 +403,7 @@ function MediaRail({
               controls
               playsInline
               preload="metadata"
-              className="h-80 w-full bg-black object-cover sm:h-[430px]"
+              className="block h-[320px] w-full bg-black object-cover sm:h-[420px] lg:h-[520px]"
             />
           )}
         </div>
