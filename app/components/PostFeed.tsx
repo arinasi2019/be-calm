@@ -195,15 +195,6 @@ function getPitfallSummary(post: Post) {
   return items.slice(0, 3);
 }
 
-function getLeadText(post: Post) {
-  const raw = post.content?.trim() || "";
-  if (!raw) return "";
-
-  const cleaned = raw.replace(/\n+/g, " ").trim();
-  if (cleaned.length <= 68) return cleaned;
-  return `${cleaned.slice(0, 68)}...`;
-}
-
 function ShareButtons({ post }: { post: Post }) {
   const shareUrl =
     typeof window !== "undefined"
@@ -622,30 +613,6 @@ function TrySection({ post }: { post: Post }) {
   );
 }
 
-function QuickSummary({ post }: { post: Post }) {
-  const summaryItems = getPitfallSummary(post);
-
-  if (!summaryItems.length) return null;
-
-  return (
-    <div className="mt-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-      <div className="mb-2 text-xs font-black tracking-wide text-slate-500 uppercase">
-        避坑重點
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {summaryItems.map((item, index) => (
-          <span
-            key={`${item}-${index}`}
-            className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
-          >
-            {item}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function PostFeed({ posts }: { posts: Post[] }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -667,6 +634,19 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const PULL_THRESHOLD = 72;
+
+  useEffect(() => {
+    function handleOpenSearch() {
+      setSearchOpen(true);
+      setActiveTab("home");
+    }
+
+    window.addEventListener("becalm-open-search", handleOpenSearch);
+
+    return () => {
+      window.removeEventListener("becalm-open-search", handleOpenSearch);
+    };
+  }, []);
 
   useEffect(() => {
     async function loadSavedPosts() {
@@ -939,7 +919,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const shouldTruncate = post.content.length > 160;
               const authorName = getAuthorName(post);
               const displayPlace = post.place_name || post.location || null;
-              const leadText = getLeadText(post);
 
               return (
                 <article
@@ -1054,12 +1033,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                     </h2>
                   </Link>
 
-                  {leadText && (
-                    <p className="mt-3 text-[15px] font-medium leading-7 text-slate-600">
-                      {leadText}
-                    </p>
-                  )}
-
                   {isIncidentPost && (post.incident_type || post.risk_level) && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {post.incident_type && (
@@ -1079,8 +1052,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                       )}
                     </div>
                   )}
-
-                  <QuickSummary post={post} />
 
                   <div className="mt-4">
                     <p

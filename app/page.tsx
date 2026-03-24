@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PostFeed from "./components/PostFeed";
 import SiteHeader from "./components/SiteHeader";
 import { supabase } from "./lib/supabase";
@@ -185,6 +185,9 @@ export default function HomePage() {
   const [selectedCity, setSelectedCity] = useState("全部");
   const [feedMode, setFeedMode] = useState<FeedMode>("推薦");
 
+  const [showFilterBar, setShowFilterBar] = useState(true);
+  const lastScrollYRef = useRef(0);
+
   useEffect(() => {
     async function load() {
       const [postsRes, votesRes, commentsRes] = await Promise.all([
@@ -237,6 +240,26 @@ export default function HomePage() {
     }
 
     load();
+  }, []);
+
+  useEffect(() => {
+    function handleScroll() {
+      const currentY = window.scrollY;
+      const lastY = lastScrollYRef.current;
+
+      if (currentY < 80) {
+        setShowFilterBar(true);
+      } else if (currentY > lastY + 8) {
+        setShowFilterBar(false);
+      } else if (currentY < lastY - 8) {
+        setShowFilterBar(true);
+      }
+
+      lastScrollYRef.current = currentY;
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const categories = ["全部", "店家", "商品", "旅遊", "服務", "人物/事件"];
@@ -423,7 +446,13 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="sticky top-[60px] z-20 mb-4 rounded-[24px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md">
+        <section
+          className={`sticky top-[60px] z-20 mb-4 rounded-[24px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md transition-all duration-300 ${
+            showFilterBar
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none -translate-y-4 opacity-0"
+          }`}
+        >
           <div className="space-y-2">
             <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <span className="shrink-0 text-[11px] font-bold text-slate-400">類別</span>
