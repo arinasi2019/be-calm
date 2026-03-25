@@ -530,7 +530,6 @@ export default function HomePage() {
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-black text-slate-900">避坑排行榜</h3>
-                <p className="text-xs text-slate-500">更像 app，一樣可以快速刷熱門</p>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
                 左右滑動
@@ -561,9 +560,6 @@ export default function HomePage() {
                 <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
                   {feedMode}動態
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  先刷內容，再決定要不要點進去。
-                </p>
               </div>
 
               <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
