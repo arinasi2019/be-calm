@@ -390,129 +390,109 @@ export default function HomePage() {
   const filterSummary = [selectedCategory, selectedCountry, selectedCity].join(" / ");
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
-      <div className="mx-auto max-w-4xl px-4 py-4 sm:px-5 sm:py-6">
-        <SiteHeader />
+    <>
+      <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
+        <div className="mx-auto max-w-4xl px-4 py-4 sm:px-5 sm:py-6">
+          <SiteHeader />
 
-        <section className="mb-5 overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
-          <div className="px-5 py-6 sm:px-7 sm:py-7">
-            <div className="flex flex-col gap-5">
-              <div className="max-w-2xl">
-                <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
-                  不種草，只避雷
+          <section className="mb-5 overflow-hidden rounded-[30px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+            <div className="px-5 py-6 sm:px-7 sm:py-7">
+              <div className="flex flex-col gap-5">
+                <div className="max-w-2xl">
+                  <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
+                    不種草，只避雷
+                  </div>
+
+                  <h1 className="mt-4 text-3xl font-black leading-tight sm:text-5xl">
+                    今天又有誰，
+                    <br className="hidden sm:block" />
+                    爆雷了？
+                  </h1>
+
+                  <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+                    最新踩雷、爆料、避坑資訊。
+                    往下刷看看大家最近踩了哪些坑，
+                    或自己也來爆一個。
+                  </p>
+
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <a
+                      href="/write"
+                      className="rounded-full bg-white px-5 py-2 text-sm font-bold text-slate-900 transition hover:bg-slate-200"
+                    >
+                      我要爆料
+                    </a>
+
+                    <button
+                      onClick={() => setFeedMode("最新")}
+                      className="rounded-full border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                    >
+                      先看最新
+                    </button>
+                  </div>
                 </div>
 
-                <h1 className="mt-4 text-3xl font-black leading-tight sm:text-5xl">
-                  今天又有誰，
-                  <br className="hidden sm:block" />
-                  出來爆雷了？
-                </h1>
-
-                <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
-                  看大家最近在吵什麼、踩了哪些坑、哪些店被狂刷坑+1。
-                  BeCalm 首頁不只是搜尋，而是直接刷最新避坑動態。
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <MiniFeedCard
-                  title="目前貼文"
-                  value={filteredPosts.length.toString()}
-                  subtitle="符合目前篩選條件"
-                />
-                <MiniFeedCard
-                  title="總坑數"
-                  value={totalPitCount.toString()}
-                  subtitle="大家一起踩過的坑"
-                />
-                <MiniFeedCard
-                  title="總留言"
-                  value={totalCommentCount.toString()}
-                  subtitle="正在發酵的討論"
-                />
+                <div className="grid grid-cols-3 gap-3">
+                  <MiniFeedCard
+                    title="目前貼文"
+                    value={filteredPosts.length.toString()}
+                    subtitle="符合目前篩選條件"
+                  />
+                  <MiniFeedCard
+                    title="總坑數"
+                    value={totalPitCount.toString()}
+                    subtitle="大家一起踩過的坑"
+                  />
+                  <MiniFeedCard
+                    title="總留言"
+                    value={totalCommentCount.toString()}
+                    subtitle="正在發酵的討論"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {(["最新", "爆雷中", "最熱"] as FeedMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setFeedMode(mode)}
-                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
-                      feedMode === mode
-                        ? "bg-white text-slate-900"
-                        : "bg-white/8 text-slate-200 ring-1 ring-white/10 hover:bg-white/12"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
+            <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {(["最新", "爆雷中", "最熱"] as FeedMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setFeedMode(mode)}
+                      className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                        feedMode === mode
+                          ? "bg-white text-slate-900"
+                          : "bg-white/8 text-slate-200 ring-1 ring-white/10 hover:bg-white/12"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-xs text-slate-300">
+                  正在查看：<span className="font-bold text-white">{feedMode}</span> ・ {filterSummary}
+                </div>
               </div>
-
-              <div className="text-xs text-slate-300">
-                正在查看：<span className="font-bold text-white">{feedMode}</span> ・ {filterSummary}
-              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section
-          className={`sticky top-[60px] z-20 mb-4 rounded-[24px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md transition-all duration-300 ${
-            showFilterBar
-              ? "translate-y-0 opacity-100"
-              : "pointer-events-none -translate-y-4 opacity-0"
-          }`}
-        >
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <span className="shrink-0 text-[11px] font-bold text-slate-400">類別</span>
-              {categories.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setSelectedCategory(item)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    selectedCategory === item
-                      ? "bg-slate-900 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <span className="shrink-0 text-[11px] font-bold text-slate-400">地區</span>
-              {countries.map((item) => (
-                <button
-                  key={item}
-                  onClick={() => {
-                    setSelectedCountry(item);
-                    setSelectedCity("全部");
-                  }}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    selectedCountry === item
-                      ? "bg-slate-900 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-
-            {cities.length > 1 && (
+          <section
+            className={`sticky top-[60px] z-20 mb-4 rounded-[24px] border border-slate-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-md transition-all duration-300 ${
+              showFilterBar
+                ? "translate-y-0 opacity-100"
+                : "pointer-events-none -translate-y-4 opacity-0"
+            }`}
+          >
+            <div className="space-y-2">
               <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <span className="shrink-0 text-[11px] font-bold text-slate-400">城市</span>
-                {cities.map((item) => (
+                <span className="shrink-0 text-[11px] font-bold text-slate-400">類別</span>
+                {categories.map((item) => (
                   <button
                     key={item}
-                    onClick={() => setSelectedCity(item)}
+                    onClick={() => setSelectedCategory(item)}
                     className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                      selectedCity === item
+                      selectedCategory === item
                         ? "bg-slate-900 text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
@@ -521,56 +501,104 @@ export default function HomePage() {
                   </button>
                 ))}
               </div>
-            )}
+
+              <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <span className="shrink-0 text-[11px] font-bold text-slate-400">地區</span>
+                {countries.map((item) => (
+                  <button
+                    key={item}
+                    onClick={() => {
+                      setSelectedCountry(item);
+                      setSelectedCity("全部");
+                    }}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      selectedCountry === item
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+
+              {cities.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <span className="shrink-0 text-[11px] font-bold text-slate-400">城市</span>
+                  {cities.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => setSelectedCity(item)}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                        selectedCity === item
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <div className="space-y-4">
+            <section className="rounded-[26px] border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">避坑排行榜</h3>
+                </div>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                  左右滑動
+                </span>
+              </div>
+
+              <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex gap-3 px-1">
+                  <div className="w-[280px] shrink-0">
+                    <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
+                  </div>
+                  <div className="w-[280px] shrink-0">
+                    <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
+                  </div>
+                  <div className="w-[280px] shrink-0">
+                    <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
+                  </div>
+                  <div className="w-[280px] shrink-0">
+                    <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="min-w-0">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
+                    {feedMode}動態
+                  </h2>
+                </div>
+
+                <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
+                  共 {displayPosts.length} 篇
+                </div>
+              </div>
+
+              <PostFeed posts={displayPosts} />
+            </section>
           </div>
-        </section>
-
-        <div className="space-y-4">
-          <section className="rounded-[26px] border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900">避坑排行榜</h3>
-              </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-                左右滑動
-              </span>
-            </div>
-
-            <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex gap-3 px-1">
-                <div className="w-[280px] shrink-0">
-                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
-                </div>
-                <div className="w-[280px] shrink-0">
-                  <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
-                </div>
-                <div className="w-[280px] shrink-0">
-                  <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
-                </div>
-                <div className="w-[280px] shrink-0">
-                  <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="min-w-0">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 sm:text-2xl">
-                  {feedMode}動態
-                </h2>
-              </div>
-
-              <div className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">
-                共 {displayPosts.length} 篇
-              </div>
-            </div>
-
-            <PostFeed posts={displayPosts} />
-          </section>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <a
+        href="/write"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-rose-600 text-xl font-black text-white shadow-xl transition hover:bg-rose-500"
+        aria-label="我要爆料"
+        title="我要爆料"
+      >
+        ＋
+      </a>
+    </>
   );
 }
