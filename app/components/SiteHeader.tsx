@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, PenSquare, User, ChevronDown } from "lucide-react";
@@ -139,8 +140,15 @@ export default function SiteHeader() {
             href="/"
             className="min-w-0 flex items-center gap-4 transition hover:opacity-90"
           >
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#0b1736] text-4xl font-black text-white shadow-sm sm:h-24 sm:w-24 sm:text-5xl">
-              坑
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-slate-200 sm:h-24 sm:w-24">
+              <Image
+                src="/becalm-main-logo.png"
+                alt="避坑 BeCalm Logo"
+                fill
+                className="object-cover"
+                sizes="(max-width: 640px) 80px, 96px"
+                priority
+              />
             </div>
 
             <div className="min-w-0">
@@ -249,14 +257,12 @@ export default function SiteHeader() {
                 )}
               </div>
             ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 sm:h-14"
-                >
-                  登入
-                </Link>
-              </>
+              <Link
+                href="/login"
+                className="flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 sm:h-14"
+              >
+                登入
+              </Link>
             )}
           </div>
         </div>
