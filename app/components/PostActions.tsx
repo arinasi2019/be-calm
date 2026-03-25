@@ -585,8 +585,6 @@ export default function PostActions({ postId }: { postId: number }) {
 
     if (error) {
       console.error("載入 saved_posts 失敗：", error.message);
-      setHasSaved(false);
-      setSavedRowId(null);
       return;
     }
 
@@ -634,6 +632,7 @@ export default function PostActions({ postId }: { postId: number }) {
 
   async function handlePitToggle() {
     if (!user) {
+      alert("請先登入後再按坑");
       goLogin();
       return;
     }
@@ -684,7 +683,10 @@ export default function PostActions({ postId }: { postId: number }) {
   }
 
   async function handleSaveToggle() {
+    console.log("收藏按鈕被點了", { postId, user });
+
     if (!user) {
+      alert("請先登入後再收藏");
       goLogin();
       return;
     }
@@ -702,6 +704,7 @@ export default function PostActions({ postId }: { postId: number }) {
         .single();
 
       if (error) {
+        console.error("收藏失敗：", error);
         setHasSaved(false);
         alert("收藏失敗：" + error.message);
         setLoadingSave(false);
@@ -709,6 +712,7 @@ export default function PostActions({ postId }: { postId: number }) {
       }
 
       setSavedRowId(data?.id ?? null);
+      alert("已收藏");
       setLoadingSave(false);
       return;
     }
@@ -720,6 +724,7 @@ export default function PostActions({ postId }: { postId: number }) {
       : await supabase.from("saved_posts").delete().eq("post_id", postId).eq("user_id", user.id);
 
     if (error) {
+      console.error("取消收藏失敗：", error);
       setHasSaved(true);
       alert("取消收藏失敗：" + error.message);
       setLoadingSave(false);
@@ -727,11 +732,13 @@ export default function PostActions({ postId }: { postId: number }) {
     }
 
     setSavedRowId(null);
+    alert("已取消收藏");
     setLoadingSave(false);
   }
 
   async function handleSubmitComment() {
     if (!user) {
+      alert("請先登入後再留言");
       goLogin();
       return;
     }
@@ -812,6 +819,7 @@ export default function PostActions({ postId }: { postId: number }) {
 
   async function handleSubmitReply(parentId: number) {
     if (!user) {
+      alert("請先登入後再回覆");
       goLogin();
       return;
     }
@@ -959,7 +967,7 @@ export default function PostActions({ postId }: { postId: number }) {
           } disabled:opacity-60`}
         >
           <span className="text-lg">⭐</span>
-          <span>收藏</span>
+          <span>{hasSaved ? "已收藏" : "收藏"}</span>
         </button>
 
         <button
