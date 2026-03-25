@@ -22,6 +22,12 @@ type VoteItem = {
   user_id?: string | null;
 };
 
+type SavedPostItem = {
+  id: number;
+  post_id: number;
+  user_id?: string | null;
+};
+
 type ProfileItem = {
   id: string;
   email?: string | null;
@@ -126,6 +132,10 @@ export default function PostActions({ postId }: { postId: number }) {
   const [loadingPit, setLoadingPit] = useState(false);
   const [userVoteId, setUserVoteId] = useState<number | null>(null);
 
+  const [hasSaved, setHasSaved] = useState(false);
+  const [loadingSave, setLoadingSave] = useState(false);
+  const [savedRowId, setSavedRowId] = useState<number | null>(null);
+
   const [sheetOpen, setSheetOpen] = useState(false);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyTextMap, setReplyTextMap] = useState<Record<number, string>>({});
@@ -200,9 +210,36 @@ export default function PostActions({ postId }: { postId: number }) {
     }
   }
 
+  async function loadSavedState() {
+    if (!user) {
+      setHasSaved(false);
+      setSavedRowId(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("saved_posts")
+      .select("id, post_id, user_id")
+      .eq("post_id", postId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("載入 saved_posts 失敗：", error.message);
+      setHasSaved(false);
+      setSavedRowId(null);
+      return;
+    }
+
+    const row = (data as SavedPostItem | null) ?? null;
+    setHasSaved(!!row);
+    setSavedRowId(row?.id ?? null);
+  }
+
   useEffect(() => {
     loadComments();
     loadVotes();
+    loadSavedState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId, user?.id]);
 
@@ -243,7 +280,6 @@ export default function PostActions({ postId }: { postId: number }) {
     }
 
     if (loadingPit) return;
-
     setLoadingPit(true);
 
     if (!hasPitted) {
@@ -286,6 +322,53 @@ export default function PostActions({ postId }: { postId: number }) {
 
     setUserVoteId(null);
     setLoadingPit(false);
+  }
+
+  async function handleSaveToggle() {
+    if (!user) {
+      goLogin();
+      return;
+    }
+
+    if (loadingSave) return;
+    setLoadingSave(true);
+
+    if (!hasSaved) {
+      setHasSaved(true);
+
+      const { data, error } = await supabase
+        .from("saved_posts")
+        .insert([{ post_id: postId, user_id: user.id }])
+        .select("id")
+        .single();
+
+      if (error) {
+        setHasSaved(false);
+        alert("收藏失敗：" + error.message);
+        setLoadingSave(false);
+        return;
+      }
+
+      setSavedRowId(data?.id ?? null);
+      setLoadingSave(false);
+      return;
+    }
+
+    setHasSaved(false);
+
+    const { error } = savedRowId
+      ? await supabase.from("saved_posts").delete().eq("id", savedRowId).eq("user_id", user.id)
+      : await supabase.from("saved_posts").delete().eq("post_id", postId).eq("user_id", user.id);
+
+    if (error) {
+      setHasSaved(true);
+      alert("取消收藏失敗：" + error.message);
+      setLoadingSave(false);
+      return;
+    }
+
+    setSavedRowId(null);
+    setLoadingSave(false);
   }
 
   async function handleSubmitComment() {
@@ -459,6 +542,22 @@ export default function PostActions({ postId }: { postId: number }) {
     setReplyingTo((prev) => (prev === commentId ? null : commentId));
   }
 
+  async function handleShare() {
+    const url = `${window.location.origin}/post/${postId}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "避坑 Be Calm",
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        alert("連結已複製");
+      }
+    } catch {}
+  }
+
   const myProfile = user ? profilesMap[user.id] : null;
   const myDisplayName = getProfileName(myProfile, user?.email ?? null);
 
@@ -476,46 +575,49 @@ export default function PostActions({ postId }: { postId: number }) {
 
   return (
     <div className="mt-5">
-      <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
+      <div className="flex items-center justify-around border-t border-slate-200 pt-3 text-sm">
         <button
           type="button"
           onClick={handlePitToggle}
           disabled={loadingPit}
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ring-1 transition-all duration-150 active:scale-95 ${
-            hasPitted
-              ? "bg-rose-100 text-rose-700 ring-rose-200 shadow-sm"
-              : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 hover:shadow-sm"
-          } disabled:opacity-70`}
+          className={`flex items-center gap-1 font-medium transition ${
+            hasPitted ? "text-rose-500" : "text-slate-500 hover:text-rose-500"
+          } disabled:opacity-60`}
         >
-          <span className={`transition-transform duration-150 ${hasPitted ? "scale-110" : ""}`}>
-            坑
-          </span>
-          <span>{pitCount}</span>
+          <span className="text-lg">⚠</span>
+          <span>坑+1</span>
+          <span className="ml-1 text-slate-400">{pitCount}</span>
         </button>
 
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium ring-1 transition-all duration-150 active:scale-95 ${
-            sheetOpen
-              ? "bg-sky-100 text-sky-700 ring-sky-200 shadow-sm"
-              : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 hover:shadow-sm"
-          }`}
+          className="flex items-center gap-1 text-slate-500 transition hover:text-sky-500"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className={`h-[16px] w-[16px] transition-transform duration-150 ${sheetOpen ? "scale-110" : ""}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <span className="text-lg">💬</span>
           <span>留言</span>
-          <span>{comments.length}</span>
+          <span className="ml-1 text-slate-400">{comments.length}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSaveToggle}
+          disabled={loadingSave}
+          className={`flex items-center gap-1 transition ${
+            hasSaved ? "text-amber-500" : "text-slate-500 hover:text-amber-500"
+          } disabled:opacity-60`}
+        >
+          <span className="text-lg">⭐</span>
+          <span>收藏</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleShare}
+          className="flex items-center gap-1 text-slate-500 transition hover:text-slate-900"
+        >
+          <span className="text-lg">↗</span>
+          <span>分享</span>
         </button>
       </div>
 
