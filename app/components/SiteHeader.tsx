@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, PenSquare, User, ChevronDown } from "lucide-react";
@@ -139,74 +138,78 @@ export default function SiteHeader() {
   };
 
   return (
-    <header className="mb-6">
-      <div className="rounded-[32px] border border-slate-200 bg-white/95 px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:px-6">
-        <div className="flex items-center justify-between gap-4">
+    <header className="mb-5 sm:mb-6">
+      <div className="rounded-[28px] border border-slate-200 bg-white/95 px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:rounded-[32px] sm:px-6 sm:py-5">
+        <div className="flex items-center justify-between gap-3 sm:gap-4">
           <Link
             href="/"
-            className="min-w-0 flex items-center gap-4 transition hover:opacity-90"
+            className="min-w-0 flex flex-1 items-center gap-3 sm:gap-4 transition hover:opacity-90"
           >
-            <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white sm:h-24 sm:w-24">
-              <Image
-                src="/becalm-main-logo.png"
-                alt="避坑 BeCalm Logo"
-                fill
-                className="object-contain p-1"
-                sizes="(max-width: 640px) 80px, 96px"
-                priority
-              />
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#0b1736] text-3xl font-black text-white shadow-sm ring-1 ring-slate-200 sm:h-20 sm:w-20 sm:text-4xl lg:h-24 lg:w-24 lg:text-5xl">
+              坑
             </div>
 
             <div className="min-w-0">
-              <div className="truncate text-3xl font-black leading-none text-slate-900 sm:text-5xl">
+              <div className="truncate text-[30px] font-black leading-none tracking-[-0.03em] text-slate-900 sm:text-3xl lg:text-5xl">
                 避坑 BeCalm
               </div>
-              <div className="mt-2 truncate text-lg font-medium text-slate-500 sm:text-2xl">
+              <div className="mt-1 truncate text-sm font-medium text-slate-500 sm:text-base lg:mt-2 lg:text-2xl">
                 不種草，只避雷
               </div>
             </div>
           </Link>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <Link
               href="/write"
-              className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-6 py-4 text-base font-bold text-white transition hover:bg-[#13214a] sm:inline-flex"
+              className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#13214a] sm:inline-flex lg:px-6 lg:py-4 lg:text-base"
             >
-              <PenSquare className="h-5 w-5" />
+              <PenSquare className="h-4 w-4 lg:h-5 lg:w-5" />
               發文
             </Link>
 
             {user ? (
               <div className="relative" ref={menuRef}>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-full transition"
-                  aria-label="開啟個人選單"
-                  aria-expanded={menuOpen}
-                >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={displayName}
-                      className="h-20 w-20 rounded-full object-cover ring-2 ring-slate-100 sm:h-24 sm:w-24"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-2 ring-slate-100 sm:h-24 sm:w-24">
-                      <User className="h-9 w-9 sm:h-10 sm:w-10" />
-                    </div>
-                  )}
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <Link
+                    href="/write"
+                    className="flex h-11 items-center justify-center rounded-full bg-[#0b1736] px-4 text-sm font-bold text-white transition hover:bg-[#13214a] sm:hidden"
+                    aria-label="發文"
+                    title="發文"
+                  >
+                    <PenSquare className="h-4 w-4" />
+                  </Link>
 
-                  <ChevronDown
-                    className={`hidden h-5 w-5 text-slate-500 transition sm:block ${
-                      menuOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((prev) => !prev)}
+                    className="flex items-center gap-1 rounded-full transition sm:gap-2"
+                    aria-label="開啟個人選單"
+                    aria-expanded={menuOpen}
+                  >
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={displayName}
+                        className="h-14 w-14 rounded-full object-cover ring-2 ring-slate-100 sm:h-16 sm:w-16 lg:h-20 lg:w-20"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-2 ring-slate-100 sm:h-16 sm:w-16 lg:h-20 lg:w-20">
+                        <User className="h-7 w-7 lg:h-9 lg:w-9" />
+                      </div>
+                    )}
+
+                    <ChevronDown
+                      className={`hidden h-4 w-4 text-slate-500 transition sm:block ${
+                        menuOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                </div>
 
                 {menuOpen && (
-                  <div className="absolute right-0 top-[92px] z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:top-[108px]">
+                  <div className="absolute right-0 top-[68px] z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:top-[76px] lg:top-[92px]">
                     <div className="border-b border-slate-100 px-4 py-4">
                       <div className="flex items-center gap-3">
                         {avatarUrl ? (
@@ -265,24 +268,24 @@ export default function SiteHeader() {
                 )}
               </div>
             ) : (
-              <Link
-                href="/login"
-                className="flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 sm:h-14"
-              >
-                登入
-              </Link>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Link
+                  href="/write"
+                  className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#13214a] sm:inline-flex"
+                >
+                  <PenSquare className="h-4 w-4" />
+                  發文
+                </Link>
+
+                <Link
+                  href="/login"
+                  className="flex h-11 items-center justify-center rounded-full bg-slate-100 px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-200 sm:h-12 sm:px-5"
+                >
+                  登入
+                </Link>
+              </div>
             )}
           </div>
-        </div>
-
-        <div className="mt-4 sm:hidden">
-          <Link
-            href="/write"
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0b1736] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#13214a]"
-          >
-            <PenSquare className="h-4 w-4" />
-            發文
-          </Link>
         </div>
       </div>
     </header>
