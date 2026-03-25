@@ -190,175 +190,6 @@ function getPitfallSummary(post: Post) {
   return items.slice(0, 3);
 }
 
-function ShareButtons({ post }: { post: Post }) {
-  const shareUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/post/${post.id}`
-      : `/post/${post.id}`;
-
-  const shareText = `${post.place_name || post.title}｜避坑 Be Calm`;
-
-  async function handleShare() {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: shareText,
-          text: post.content.slice(0, 60),
-          url: shareUrl,
-        });
-      } else {
-        await navigator.clipboard.writeText(shareUrl);
-        alert("文章連結已複製");
-      }
-    } catch {}
-  }
-
-  return (
-    <button
-      onClick={handleShare}
-      className="text-sm font-medium text-slate-500 hover:text-slate-900"
-    >
-      分享
-    </button>
-  );
-}
-
-function Lightbox({
-  mediaList,
-  currentIndex,
-  onClose,
-  onPrev,
-  onNext,
-  onJump,
-}: {
-  mediaList: MediaItem[];
-  currentIndex: number;
-  onClose: () => void;
-  onPrev: () => void;
-  onNext: () => void;
-  onJump: (index: number) => void;
-}) {
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft") onPrev();
-      if (e.key === "ArrowRight") onNext();
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [onClose, onPrev, onNext]);
-
-  if (!mediaList.length) return null;
-  const current = mediaList[currentIndex];
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/90" onClick={onClose}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold text-white backdrop-blur"
-      >
-        關閉
-      </button>
-
-      {mediaList.length > 1 && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onPrev();
-          }}
-          className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
-        >
-          ←
-        </button>
-      )}
-
-      {mediaList.length > 1 && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onNext();
-          }}
-          className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
-        >
-          →
-        </button>
-      )}
-
-      <div
-        className="flex h-full flex-col items-center justify-center px-4 pb-6 pt-16"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex min-h-0 w-full max-w-5xl flex-1 items-center justify-center">
-          {current.type === "image" ? (
-            <img
-              src={current.url}
-              alt={`preview-${currentIndex}`}
-              className="max-h-[72vh] max-w-full rounded-2xl object-contain"
-            />
-          ) : (
-            <video
-              src={current.url}
-              controls
-              playsInline
-              preload="metadata"
-              className="max-h-[72vh] max-w-full rounded-2xl bg-black object-contain"
-            />
-          )}
-        </div>
-
-        {mediaList.length > 1 && (
-          <>
-            <div className="mt-3 text-center text-sm text-white/80">
-              {currentIndex + 1} / {mediaList.length}
-            </div>
-
-            <div className="mt-4 w-full max-w-4xl overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <div className="flex gap-2">
-                {mediaList.map((media, index) => (
-                  <button
-                    key={`${media.url}-${index}`}
-                    onClick={() => onJump(index)}
-                    className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${
-                      currentIndex === index ? "border-white" : "border-white/20"
-                    }`}
-                  >
-                    {media.type === "image" ? (
-                      <img
-                        src={media.url}
-                        alt={`thumb-${index}`}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <>
-                        <video
-                          src={media.url}
-                          className="h-full w-full bg-black object-cover"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/35 text-[10px] font-bold text-white">
-                          VIDEO
-                        </div>
-                      </>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function MediaRail({
   post,
   onOpenMedia,
@@ -543,6 +374,142 @@ function SearchModal({
   );
 }
 
+function Lightbox({
+  mediaList,
+  currentIndex,
+  onClose,
+  onPrev,
+  onNext,
+  onJump,
+}: {
+  mediaList: MediaItem[];
+  currentIndex: number;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+  onJump: (index: number) => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") onPrev();
+      if (e.key === "ArrowRight") onNext();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [onClose, onPrev, onNext]);
+
+  if (!mediaList.length) return null;
+  const current = mediaList[currentIndex];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90" onClick={onClose}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        className="absolute right-4 top-4 z-10 rounded-full bg-white/15 px-3 py-2 text-sm font-semibold text-white backdrop-blur"
+      >
+        關閉
+      </button>
+
+      {mediaList.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
+          className="absolute left-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
+        >
+          ←
+        </button>
+      )}
+
+      {mediaList.length > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-white/15 px-4 py-3 text-white backdrop-blur"
+        >
+          →
+        </button>
+      )}
+
+      <div
+        className="flex h-full flex-col items-center justify-center px-4 pb-6 pt-16"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex min-h-0 w-full max-w-5xl flex-1 items-center justify-center">
+          {current.type === "image" ? (
+            <img
+              src={current.url}
+              alt={`preview-${currentIndex}`}
+              className="max-h-[72vh] max-w-full rounded-2xl object-contain"
+            />
+          ) : (
+            <video
+              src={current.url}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-[72vh] max-w-full rounded-2xl bg-black object-contain"
+            />
+          )}
+        </div>
+
+        {mediaList.length > 1 && (
+          <>
+            <div className="mt-3 text-center text-sm text-white/80">
+              {currentIndex + 1} / {mediaList.length}
+            </div>
+
+            <div className="mt-4 w-full max-w-4xl overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-2">
+                {mediaList.map((media, index) => (
+                  <button
+                    key={`${media.url}-${index}`}
+                    onClick={() => onJump(index)}
+                    className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${
+                      currentIndex === index ? "border-white" : "border-white/20"
+                    }`}
+                  >
+                    {media.type === "image" ? (
+                      <img
+                        src={media.url}
+                        alt={`thumb-${index}`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <>
+                        <video
+                          src={media.url}
+                          className="h-full w-full bg-black object-cover"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/35 text-[10px] font-bold text-white">
+                          VIDEO
+                        </div>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TrySection({ post }: { post: Post }) {
   if (!shouldShowTrySection(post)) return null;
 
@@ -618,16 +585,17 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<TabType>("home");
   const [query, setQuery] = useState("");
-  const [savedIds, setSavedIds] = useState<number[]>([]);
-  const [savedLoading, setSavedLoading] = useState(true);
-  const [expandedPostIds, setExpandedPostIds] = useState<number[]>([]);
-  const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [visibleCount, setVisibleCount] = useState(6);
   const [searchOpen, setSearchOpen] = useState(false);
   const [hasHandledHashScroll, setHasHandledHashScroll] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<TabType>("home");
+
+  const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const [expandedPostIds, setExpandedPostIds] = useState<number[]>([]);
 
   const feedRef = useRef<HTMLElement | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -648,36 +616,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       window.removeEventListener("becalm-open-search", handleOpenSearch);
     };
   }, []);
-
-  useEffect(() => {
-    async function loadSavedPosts() {
-      if (!user) {
-        setSavedIds([]);
-        setSavedLoading(false);
-        return;
-      }
-
-      setSavedLoading(true);
-
-      const { data, error } = await supabase
-        .from("saved_posts")
-        .select("post_id")
-        .eq("user_id", user.id);
-
-      if (error) {
-        console.error("載入收藏失敗：", error.message);
-        setSavedIds([]);
-        setSavedLoading(false);
-        return;
-      }
-
-      const ids = ((data ?? []) as { post_id: number }[]).map((item) => item.post_id);
-      setSavedIds(ids);
-      setSavedLoading(false);
-    }
-
-    loadSavedPosts();
-  }, [user]);
 
   useEffect(() => {
     let ticking = false;
@@ -720,9 +658,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     });
   }, [posts, query]);
 
-  const savedPosts = useMemo(() => posts.filter((post) => savedIds.includes(post.id)), [posts, savedIds]);
-  const sourcePosts = activeTab === "saved" ? savedPosts : posts;
-
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -732,11 +667,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     const id = Number(hash.replace("#post-", ""));
     if (!id) return;
 
-    const index = sourcePosts.findIndex((post) => post.id === id);
+    const index = posts.findIndex((post) => post.id === id);
     if (index >= 0) {
       setVisibleCount((prev) => Math.max(prev, index + 1));
     }
-  }, [sourcePosts]);
+  }, [posts]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -754,7 +689,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [sourcePosts, visibleCount, hasHandledHashScroll]);
+  }, [posts, visibleCount, hasHandledHashScroll]);
 
   function handleTabChange(tab: TabType) {
     if (tab === "search") {
@@ -763,45 +698,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       return;
     }
     setActiveTab(tab);
-  }
-
-  async function toggleSave(postId: number) {
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    const isSaved = savedIds.includes(postId);
-
-    if (isSaved) {
-      setSavedIds((prev) => prev.filter((id) => id !== postId));
-
-      const { error } = await supabase
-        .from("saved_posts")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("post_id", postId);
-
-      if (error) {
-        console.error("取消收藏失敗：", error.message);
-        setSavedIds((prev) => [...prev, postId]);
-      }
-      return;
-    }
-
-    setSavedIds((prev) => [...prev, postId]);
-
-    const { error } = await supabase.from("saved_posts").insert([
-      {
-        user_id: user.id,
-        post_id: postId,
-      },
-    ]);
-
-    if (error) {
-      console.error("收藏失敗：", error.message);
-      setSavedIds((prev) => prev.filter((id) => id !== postId));
-    }
   }
 
   function toggleExpand(postId: number) {
@@ -870,7 +766,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     setPullDistance(0);
   }
 
-  const displayPosts = sourcePosts.slice(0, visibleCount);
+  const displayPosts = posts.slice(0, visibleCount);
 
   return (
     <>
@@ -904,18 +800,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
           )}
         </div>
 
-        {savedLoading && activeTab === "saved" ? (
+        {displayPosts.length === 0 ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
-            載入收藏中...
-          </div>
-        ) : displayPosts.length === 0 ? (
-          <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
-            {activeTab === "saved" ? "你目前還沒有收藏貼文" : "目前還沒有貼文，來發第一篇吧。"}
+            目前還沒有貼文，來發第一篇吧。
           </div>
         ) : (
           <>
             {displayPosts.map((post) => {
-              const isSaved = savedIds.includes(post.id);
               const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
               const isExpanded = expandedPostIds.includes(post.id);
               const shouldTruncate = post.content.length > 160;
@@ -927,7 +818,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                 <article
                   id={`post-${post.id}`}
                   key={post.id}
-                  className={`overflow-hidden rounded-[30px] border bg-white p-5 shadow-sm transition hover:-translate-y-[1px] hover:shadow-md sm:p-6 ${
+                  className={`overflow-hidden rounded-[30px] border bg-white p-5 shadow-sm transition hover:shadow-md sm:p-6 ${
                     isIncidentPost ? "border-rose-200" : "border-slate-200"
                   }`}
                 >
@@ -975,17 +866,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                         </div>
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => toggleSave(post.id)}
-                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                        isSaved
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      {isSaved ? "已收藏" : "收藏"}
-                    </button>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1085,16 +965,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                   <TrySection post={post} />
 
-                  <div className="mt-5 flex items-center gap-4 border-t border-slate-100 pt-4">
-                    <ShareButtons post={post} />
-                  </div>
-
                   <PostActions postId={post.id} />
                 </article>
               );
             })}
 
-            {displayPosts.length < sourcePosts.length && (
+            {displayPosts.length < posts.length && (
               <div className="text-center text-sm text-slate-500">往下滑可載入更多內容</div>
             )}
           </>
