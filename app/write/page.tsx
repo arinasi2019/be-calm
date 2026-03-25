@@ -10,11 +10,24 @@ import { useAuth } from "../components/AuthProvider";
 const COUNTRY_OPTIONS = [
   "日本",
   "台灣",
-  "泰國",
-  "澳洲",
   "韓國",
+  "中國",
   "香港",
   "新加坡",
+  "泰國",
+  "越南",
+  "馬來西亞",
+  "印尼",
+  "菲律賓",
+  "澳洲",
+  "紐西蘭",
+  "美國",
+  "加拿大",
+  "英國",
+  "法國",
+  "德國",
+  "義大利",
+  "西班牙",
   "其他",
 ];
 
@@ -33,6 +46,7 @@ export default function WritePage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("店家");
   const [country, setCountry] = useState("日本");
+  const [customCountry, setCustomCountry] = useState("");
   const [city, setCity] = useState("");
   const [location, setLocation] = useState("");
   const [placeName, setPlaceName] = useState("");
@@ -139,7 +153,15 @@ export default function WritePage() {
       return;
     }
 
+    if (country === "其他" && !customCountry.trim()) {
+      alert("請輸入其他國家名稱");
+      setLoadingSubmit(false);
+      return;
+    }
+
     try {
+      const finalCountry = country === "其他" ? customCountry.trim() : country;
+
       let mediaItems: MediaItem[] = [];
 
       if (imageFiles.length > 0) {
@@ -165,7 +187,7 @@ export default function WritePage() {
           user_id: user.id,
           title,
           category,
-          country,
+          country: finalCountry,
           city: city || null,
           location,
           place_name: placeName || null,
@@ -196,6 +218,7 @@ export default function WritePage() {
       setTitle("");
       setCategory("店家");
       setCountry("日本");
+      setCustomCountry("");
       setCity("");
       setLocation("");
       setPlaceName("");
@@ -295,6 +318,19 @@ export default function WritePage() {
                     <option key={item}>{item}</option>
                   ))}
                 </select>
+
+                {country === "其他" && (
+                  <div className="mt-3">
+                    <label className="mb-2 block text-sm font-medium">其他國家</label>
+                    <input
+                      type="text"
+                      value={customCountry}
+                      onChange={(e) => setCustomCountry(e.target.value)}
+                      placeholder="請輸入國家名稱，例如：冰島 / 土耳其 / 秘魯"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
