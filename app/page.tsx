@@ -190,16 +190,45 @@ export default function HomePage() {
 
   useEffect(() => {
     async function load() {
+      console.log("=== BeCalm 首頁開始載入資料 ===");
+      console.log("Supabase client:", supabase);
+
       const [postsRes, votesRes, commentsRes] = await Promise.all([
         supabase.from("posts").select("*").order("id", { ascending: false }),
         supabase.from("votes").select("id, post_id"),
         supabase.from("comments").select("id, post_id"),
       ]);
 
+      console.log("postsRes:", postsRes);
+      console.log("votesRes:", votesRes);
+      console.log("commentsRes:", commentsRes);
+
+      if (postsRes.error) {
+        console.error("載入 posts 失敗：", postsRes.error);
+      }
+
+      if (votesRes.error) {
+        console.error("載入 votes 失敗：", votesRes.error);
+      }
+
+      if (commentsRes.error) {
+        console.error("載入 comments 失敗：", commentsRes.error);
+      }
+
       const rawPosts = (postsRes.data as Post[]) || [];
+      const rawVotes = (votesRes.data as Vote[]) || [];
+      const rawComments = (commentsRes.data as Comment[]) || [];
+
+      console.log("posts 筆數:", rawPosts.length);
+      console.log("votes 筆數:", rawVotes.length);
+      console.log("comments 筆數:", rawComments.length);
+      console.log("posts 原始資料:", rawPosts);
+
       const userIds = Array.from(
         new Set(rawPosts.map((post) => post.user_id).filter(Boolean) as string[])
       );
+
+      console.log("要抓 profiles 的 userIds:", userIds);
 
       const profileMap: Record<string, Profile> = {};
 
@@ -209,34 +238,29 @@ export default function HomePage() {
           .select("id, email, username, display_name")
           .in("id", userIds);
 
+        console.log("profilesRes:", profilesRes);
+
         if (!profilesRes.error) {
           ((profilesRes.data as Profile[]) || []).forEach((profile) => {
             profileMap[profile.id] = profile;
           });
+        } else {
+          console.error("載入 profiles 失敗：", profilesRes.error);
         }
       }
 
-      if (postsRes.error) {
-        console.error("載入 posts 失敗：", postsRes.error.message);
-      } else {
-        const nextPosts = rawPosts.map((post) => ({
-          ...post,
-          author_profile: post.user_id ? profileMap[post.user_id] || null : null,
-        }));
-        setPosts(nextPosts);
-      }
+      const nextPosts = rawPosts.map((post) => ({
+        ...post,
+        author_profile: post.user_id ? profileMap[post.user_id] || null : null,
+      }));
 
-      if (votesRes.error) {
-        console.error("載入 votes 失敗：", votesRes.error.message);
-      } else {
-        setVotes((votesRes.data as Vote[]) || []);
-      }
+      console.log("組合後 nextPosts:", nextPosts);
 
-      if (commentsRes.error) {
-        console.error("載入 comments 失敗：", commentsRes.error.message);
-      } else {
-        setComments((commentsRes.data as Comment[]) || []);
-      }
+      setPosts(nextPosts);
+      setVotes(rawVotes);
+      setComments(rawComments);
+
+      console.log("=== BeCalm 首頁資料載入完成 ===");
     }
 
     load();
@@ -266,6 +290,7 @@ export default function HomePage() {
 
   const countries = useMemo(() => {
     const items = Array.from(new Set(posts.map((p) => p.country).filter(Boolean))) as string[];
+    console.log("countries options:", items);
     return ["全部", ...items];
   }, [posts]);
 
@@ -276,11 +301,12 @@ export default function HomePage() {
     });
 
     const items = Array.from(new Set(filtered.map((p) => p.city).filter(Boolean))) as string[];
+    console.log("cities options:", items);
     return ["全部", ...items];
   }, [posts, selectedCountry]);
 
   const postsWithStats: RankedPost[] = useMemo(() => {
-    return posts.map((post) => {
+    const mapped = posts.map((post) => {
       const pitCount = votes.filter((vote) => vote.post_id === post.id).length;
       const commentCount = comments.filter((c) => c.post_id === post.id).length;
       const hotScore = getHotScore(post, pitCount, commentCount);
@@ -294,15 +320,21 @@ export default function HomePage() {
         trendScore,
       };
     });
+
+    console.log("postsWithStats:", mapped);
+    return mapped;
   }, [posts, votes, comments]);
 
   const filteredPosts = useMemo(() => {
-    return postsWithStats.filter((post) => {
+    const result = postsWithStats.filter((post) => {
       const matchCategory = selectedCategory === "全部" || post.category === selectedCategory;
       const matchCountry = selectedCountry === "全部" || post.country === selectedCountry;
       const matchCity = selectedCity === "全部" || post.city === selectedCity;
       return matchCategory && matchCountry && matchCity;
     });
+
+    console.log("filteredPosts:", result);
+    return result;
   }, [postsWithStats, selectedCategory, selectedCountry, selectedCity]);
 
   const allTimeHot = useMemo(
@@ -388,6 +420,16 @@ export default function HomePage() {
   );
 
   const filterSummary = [selectedCategory, selectedCountry, selectedCity].join(" / ");
+
+  console.log("首頁 render 狀態:", {
+    postsLength: posts.length,
+    votesLength: votes.length,
+    commentsLength: comments.length,
+    filteredPostsLength: filteredPosts.length,
+    displayPostsLength: displayPosts.length,
+    totalPitCount,
+    totalCommentCount,
+  });
 
   return (
     <>
