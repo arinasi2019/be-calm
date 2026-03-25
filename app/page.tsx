@@ -391,7 +391,7 @@ export default function HomePage() {
 
   return (
     <>
-      <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <main className="min-h-screen bg-[#f5f7fb] pb-24 text-slate-900">
         <div className="mx-auto max-w-4xl px-4 py-4 sm:px-5 sm:py-6">
           <SiteHeader />
 
@@ -415,20 +415,13 @@ export default function HomePage() {
                     或自己也來爆一個。
                   </p>
 
-                  <div className="mt-6 flex flex-wrap gap-3">
+                  <div className="mt-6">
                     <a
                       href="/write"
-                      className="rounded-full bg-white px-5 py-2 text-sm font-bold text-slate-900 transition hover:bg-slate-200"
+                      className="inline-flex items-center rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 transition hover:bg-slate-200"
                     >
-                      我要爆料
+                      ＋ 我要爆雷
                     </a>
-
-                    <button
-                      onClick={() => setFeedMode("最新")}
-                      className="rounded-full border border-white/30 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                    >
-                      先看最新
-                    </button>
                   </div>
                 </div>
 
@@ -593,7 +586,7 @@ export default function HomePage() {
 
       <a
         href="/write"
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-rose-600 text-xl font-black text-white shadow-xl transition hover:bg-rose-500"
+        className="fixed bottom-20 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-rose-600 text-lg font-black text-white shadow-xl transition hover:bg-rose-500 sm:bottom-6 sm:right-6 sm:h-14 sm:w-14 sm:text-xl"
         aria-label="我要爆料"
         title="我要爆料"
       >
