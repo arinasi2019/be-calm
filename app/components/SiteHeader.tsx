@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
-  PencilSquareIcon,
+  PenSquare,
   Search,
   User,
   ChevronDown,
@@ -115,11 +115,7 @@ export default function SiteHeader() {
   }, []);
 
   const avatarUrl = useMemo(() => {
-    return (
-      profile?.avatar_url ||
-      user?.user_metadata?.avatar_url ||
-      null
-    );
+    return profile?.avatar_url || user?.user_metadata?.avatar_url || null;
   }, [profile, user]);
 
   const displayName = useMemo(() => {
@@ -177,7 +173,7 @@ export default function SiteHeader() {
               href="/write"
               className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-6 py-4 text-base font-bold text-white transition hover:bg-[#13214a] sm:inline-flex"
             >
-              <PencilSquareIcon className="h-5 w-5" />
+              <PenSquare className="h-5 w-5" />
               發文
             </Link>
 
@@ -251,7 +247,7 @@ export default function SiteHeader() {
                         onClick={() => setMenuOpen(false)}
                         className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                       >
-                        <PencilSquareIcon className="h-4 w-4" />
+                        <PenSquare className="h-4 w-4" />
                         發表貼文
                       </Link>
 
