@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthProvider";
@@ -113,6 +114,364 @@ function MediaPreview({
       alt="comment-media"
       className="mt-3 max-h-72 w-full rounded-2xl object-cover"
     />
+  );
+}
+
+function CommentsSheet({
+  open,
+  onClose,
+  comments,
+  loadingComments,
+  topLevelComments,
+  repliesByParent,
+  profilesMap,
+  replyingTo,
+  setReplyingTo,
+  replyTextMap,
+  setReplyTextMap,
+  replyFileMap,
+  setReplyFileMap,
+  loadingReplyId,
+  handleSubmitReply,
+  user,
+  myProfile,
+  myDisplayName,
+  commentText,
+  setCommentText,
+  commentFile,
+  setCommentFile,
+  loadingComment,
+  handleSubmitComment,
+  goLogin,
+  replyBoxRefs,
+}: {
+  open: boolean;
+  onClose: () => void;
+  comments: CommentItem[];
+  loadingComments: boolean;
+  topLevelComments: CommentItem[];
+  repliesByParent: Record<number, CommentItem[]>;
+  profilesMap: Record<string, ProfileItem>;
+  replyingTo: number | null;
+  setReplyingTo: React.Dispatch<React.SetStateAction<number | null>>;
+  replyTextMap: Record<number, string>;
+  setReplyTextMap: React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  replyFileMap: Record<number, File | null>;
+  setReplyFileMap: React.Dispatch<React.SetStateAction<Record<number, File | null>>>;
+  loadingReplyId: number | null;
+  handleSubmitReply: (parentId: number) => Promise<void>;
+  user: ReturnType<typeof useAuth>["user"];
+  myProfile: ProfileItem | null;
+  myDisplayName: string;
+  commentText: string;
+  setCommentText: React.Dispatch<React.SetStateAction<string>>;
+  commentFile: File | null;
+  setCommentFile: React.Dispatch<React.SetStateAction<File | null>>;
+  loadingComment: boolean;
+  handleSubmitComment: () => Promise<void>;
+  goLogin: () => void;
+  replyBoxRefs: React.MutableRefObject<Record<number, HTMLDivElement | null>>;
+}) {
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999]">
+      <div
+        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-4xl px-3 sm:px-4">
+        <div className="flex max-h-[84vh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200/70 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.22)]">
+          <div className="sticky top-0 z-10 rounded-t-[32px] border-b border-slate-100 bg-white/95 backdrop-blur">
+            <div className="flex justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-300/90" />
+            </div>
+
+            <div className="flex items-center justify-between px-4 pb-3 pt-2 sm:px-6">
+              <div className="text-sm font-semibold text-slate-900">
+                留言 {comments.length > 0 ? `(${comments.length})` : ""}
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm"
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+            {loadingComments ? (
+              <div className="text-sm text-slate-400">載入留言中...</div>
+            ) : topLevelComments.length === 0 ? (
+              <div className="text-sm text-slate-400">還沒有留言，來留第一則吧。</div>
+            ) : (
+              <div className="space-y-3">
+                {topLevelComments.map((comment) => {
+                  const replies = repliesByParent[comment.id] || [];
+                  const isReplying = replyingTo === comment.id;
+                  const commentProfile = comment.user_id ? profilesMap[comment.user_id] : null;
+                  const commentName = getProfileName(commentProfile);
+
+                  return (
+                    <div
+                      key={comment.id}
+                      className="rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70"
+                    >
+                      <div className="mb-2 flex items-center gap-3">
+                        {commentProfile?.avatar_url ? (
+                          <img
+                            src={commentProfile.avatar_url}
+                            alt={commentName}
+                            className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
+                            {getProfileInitial(commentProfile)}
+                          </div>
+                        )}
+
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {commentName}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {formatRelativeTime(comment.created_at)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!!comment.content && (
+                        <div className="whitespace-pre-wrap pl-11 text-sm leading-6 text-slate-700">
+                          {comment.content}
+                        </div>
+                      )}
+
+                      {comment.media_url && comment.media_type && (
+                        <div className="pl-11">
+                          <MediaPreview url={comment.media_url} type={comment.media_type} />
+                        </div>
+                      )}
+
+                      <div className="mt-2 pl-11">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!user) {
+                              goLogin();
+                              return;
+                            }
+                            setReplyingTo((prev) => (prev === comment.id ? null : comment.id));
+                          }}
+                          className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                        >
+                          {isReplying ? "收起回覆" : "回覆"}
+                        </button>
+                      </div>
+
+                      {replies.length > 0 && (
+                        <div className="mt-3 space-y-2 pl-11">
+                          {replies.map((reply) => {
+                            const replyProfile = reply.user_id ? profilesMap[reply.user_id] : null;
+                            const replyName = getProfileName(replyProfile);
+
+                            return (
+                              <div
+                                key={reply.id}
+                                className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
+                              >
+                                <div className="mb-1 flex items-center gap-2">
+                                  {replyProfile?.avatar_url ? (
+                                    <img
+                                      src={replyProfile.avatar_url}
+                                      alt={replyName}
+                                      className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-200"
+                                    />
+                                  ) : (
+                                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
+                                      {getProfileInitial(replyProfile)}
+                                    </div>
+                                  )}
+
+                                  <div className="text-xs font-semibold text-slate-800">
+                                    {replyName}
+                                  </div>
+                                  <div className="text-[11px] text-slate-400">
+                                    {formatRelativeTime(reply.created_at)}
+                                  </div>
+                                </div>
+
+                                {!!reply.content && (
+                                  <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                    {reply.content}
+                                  </div>
+                                )}
+
+                                {reply.media_url && reply.media_type && (
+                                  <MediaPreview url={reply.media_url} type={reply.media_type} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isReplying && user && (
+                        <div
+                          ref={(el) => {
+                            replyBoxRefs.current[comment.id] = el;
+                          }}
+                          className="mt-3 pl-11"
+                        >
+                          <textarea
+                            value={replyTextMap[comment.id] || ""}
+                            onChange={(e) =>
+                              setReplyTextMap((prev) => ({
+                                ...prev,
+                                [comment.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="回覆這則留言..."
+                            rows={2}
+                            className="min-h-[48px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
+                          />
+
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                            <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
+                              加照片/影片
+                              <input
+                                type="file"
+                                accept="image/*,video/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  setReplyFileMap((prev) => ({
+                                    ...prev,
+                                    [comment.id]: file,
+                                  }));
+                                }}
+                              />
+                            </label>
+
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setReplyingTo(null)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
+                              >
+                                取消
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSubmitReply(comment.id)}
+                                disabled={
+                                  loadingReplyId === comment.id ||
+                                  (!(replyTextMap[comment.id] || "").trim() &&
+                                    !replyFileMap[comment.id])
+                                }
+                                className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                              >
+                                {loadingReplyId === comment.id ? "送出中..." : "送出回覆"}
+                              </button>
+                            </div>
+                          </div>
+
+                          {replyFileMap[comment.id] && (
+                            <div className="mt-2 text-xs text-slate-500">
+                              已選擇：{replyFileMap[comment.id]?.name}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
+            {user ? (
+              <div className="flex items-start gap-3">
+                {myProfile?.avatar_url ? (
+                  <img
+                    src={myProfile.avatar_url}
+                    alt={myDisplayName}
+                    className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
+                    {getProfileInitial(myProfile, user.email ?? null)}
+                  </div>
+                )}
+
+                <div className="flex-1">
+                  <div className="mb-2 text-sm font-semibold text-slate-900">
+                    {myDisplayName}
+                  </div>
+
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="寫下你的留言..."
+                    rows={2}
+                    className="min-h-[52px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none"
+                  />
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+                      加照片/影片
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setCommentFile(file);
+                        }}
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={handleSubmitComment}
+                      disabled={loadingComment || (!commentText.trim() && !commentFile)}
+                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                    >
+                      {loadingComment ? "送出中..." : "送出留言"}
+                    </button>
+                  </div>
+
+                  {commentFile && (
+                    <div className="mt-2 text-xs text-slate-500">
+                      已選擇：{commentFile.name}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600 ring-1 ring-slate-200/70">
+                先看看大家的留言。想留言、回覆或附圖時，再登入就可以。
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={goLogin}
+                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    前往登入
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -534,14 +893,6 @@ export default function PostActions({ postId }: { postId: number }) {
     setLoadingReplyId(null);
   }
 
-  function toggleReply(commentId: number) {
-    if (!user) {
-      goLogin();
-      return;
-    }
-    setReplyingTo((prev) => (prev === commentId ? null : commentId));
-  }
-
   async function handleShare() {
     const url = `${window.location.origin}/post/${postId}`;
 
@@ -621,298 +972,34 @@ export default function PostActions({ postId }: { postId: number }) {
         </button>
       </div>
 
-      {sheetOpen && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
-            onClick={() => setSheetOpen(false)}
-          />
-
-          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-4xl px-3 sm:px-4">
-            <div className="flex max-h-[84vh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200/70 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.22)]">
-              <div className="sticky top-0 z-10 rounded-t-[32px] border-b border-slate-100 bg-white/95 backdrop-blur">
-                <div className="flex justify-center pt-3">
-                  <div className="h-1.5 w-12 rounded-full bg-slate-300/90" />
-                </div>
-
-                <div className="flex items-center justify-between px-4 pb-3 pt-2 sm:px-6">
-                  <div className="text-sm font-semibold text-slate-900">
-                    留言 {comments.length > 0 ? `(${comments.length})` : ""}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setSheetOpen(false)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm"
-                  >
-                    關閉
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-                {loadingComments ? (
-                  <div className="text-sm text-slate-400">載入留言中...</div>
-                ) : topLevelComments.length === 0 ? (
-                  <div className="text-sm text-slate-400">還沒有留言，來留第一則吧。</div>
-                ) : (
-                  <div className="space-y-3">
-                    {topLevelComments.map((comment) => {
-                      const replies = repliesByParent[comment.id] || [];
-                      const isReplying = replyingTo === comment.id;
-                      const commentProfile = comment.user_id ? profilesMap[comment.user_id] : null;
-                      const commentName = getProfileName(commentProfile);
-
-                      return (
-                        <div
-                          key={comment.id}
-                          className="rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70"
-                        >
-                          <div className="mb-2 flex items-center gap-3">
-                            {commentProfile?.avatar_url ? (
-                              <img
-                                src={commentProfile.avatar_url}
-                                alt={commentName}
-                                className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
-                              />
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-700">
-                                {getProfileInitial(commentProfile)}
-                              </div>
-                            )}
-
-                            <div className="min-w-0">
-                              <div className="text-sm font-semibold text-slate-900">
-                                {commentName}
-                              </div>
-                              <div className="text-xs text-slate-400">
-                                {formatRelativeTime(comment.created_at)}
-                              </div>
-                            </div>
-                          </div>
-
-                          {!!comment.content && (
-                            <div className="whitespace-pre-wrap pl-11 text-sm leading-6 text-slate-700">
-                              {comment.content}
-                            </div>
-                          )}
-
-                          {comment.media_url && comment.media_type && (
-                            <div className="pl-11">
-                              <MediaPreview url={comment.media_url} type={comment.media_type} />
-                            </div>
-                          )}
-
-                          <div className="mt-2 pl-11">
-                            <button
-                              type="button"
-                              onClick={() => toggleReply(comment.id)}
-                              className="text-xs font-medium text-slate-500 hover:text-slate-900"
-                            >
-                              {isReplying ? "收起回覆" : "回覆"}
-                            </button>
-                          </div>
-
-                          {replies.length > 0 && (
-                            <div className="mt-3 space-y-2 pl-11">
-                              {replies.map((reply) => {
-                                const replyProfile = reply.user_id ? profilesMap[reply.user_id] : null;
-                                const replyName = getProfileName(replyProfile);
-
-                                return (
-                                  <div
-                                    key={reply.id}
-                                    className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70"
-                                  >
-                                    <div className="mb-1 flex items-center gap-2">
-                                      {replyProfile?.avatar_url ? (
-                                        <img
-                                          src={replyProfile.avatar_url}
-                                          alt={replyName}
-                                          className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-200"
-                                        />
-                                      ) : (
-                                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-700">
-                                          {getProfileInitial(replyProfile)}
-                                        </div>
-                                      )}
-
-                                      <div className="text-xs font-semibold text-slate-800">
-                                        {replyName}
-                                      </div>
-                                      <div className="text-[11px] text-slate-400">
-                                        {formatRelativeTime(reply.created_at)}
-                                      </div>
-                                    </div>
-
-                                    {!!reply.content && (
-                                      <div className="whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                                        {reply.content}
-                                      </div>
-                                    )}
-
-                                    {reply.media_url && reply.media_type && (
-                                      <MediaPreview url={reply.media_url} type={reply.media_type} />
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {isReplying && user && (
-                            <div
-                              ref={(el) => {
-                                replyBoxRefs.current[comment.id] = el;
-                              }}
-                              className="mt-3 pl-11"
-                            >
-                              <textarea
-                                value={replyTextMap[comment.id] || ""}
-                                onChange={(e) =>
-                                  setReplyTextMap((prev) => ({
-                                    ...prev,
-                                    [comment.id]: e.target.value,
-                                  }))
-                                }
-                                placeholder="回覆這則留言..."
-                                rows={2}
-                                className="min-h-[48px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none"
-                              />
-
-                              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                                <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">
-                                  加照片/影片
-                                  <input
-                                    type="file"
-                                    accept="image/*,video/*"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                      const file = e.target.files?.[0] || null;
-                                      setReplyFileMap((prev) => ({
-                                        ...prev,
-                                        [comment.id]: file,
-                                      }));
-                                    }}
-                                  />
-                                </label>
-
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setReplyingTo(null)}
-                                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
-                                  >
-                                    取消
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSubmitReply(comment.id)}
-                                    disabled={
-                                      loadingReplyId === comment.id ||
-                                      (!(replyTextMap[comment.id] || "").trim() &&
-                                        !replyFileMap[comment.id])
-                                    }
-                                    className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                                  >
-                                    {loadingReplyId === comment.id ? "送出中..." : "送出回覆"}
-                                  </button>
-                                </div>
-                              </div>
-
-                              {replyFileMap[comment.id] && (
-                                <div className="mt-2 text-xs text-slate-500">
-                                  已選擇：{replyFileMap[comment.id]?.name}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
-                {user ? (
-                  <div className="flex items-start gap-3">
-                    {myProfile?.avatar_url ? (
-                      <img
-                        src={myProfile.avatar_url}
-                        alt={myDisplayName}
-                        className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
-                      />
-                    ) : (
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white shadow-sm">
-                        {getProfileInitial(myProfile, user.email ?? null)}
-                      </div>
-                    )}
-
-                    <div className="flex-1">
-                      <div className="mb-2 text-sm font-semibold text-slate-900">
-                        {myDisplayName}
-                      </div>
-
-                      <textarea
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        placeholder="寫下你的留言..."
-                        rows={2}
-                        className="min-h-[52px] w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none"
-                      />
-
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                        <label className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
-                          加照片/影片
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              setCommentFile(file);
-                            }}
-                          />
-                        </label>
-
-                        <button
-                          type="button"
-                          onClick={handleSubmitComment}
-                          disabled={loadingComment || (!commentText.trim() && !commentFile)}
-                          className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
-                        >
-                          {loadingComment ? "送出中..." : "送出留言"}
-                        </button>
-                      </div>
-
-                      {commentFile && (
-                        <div className="mt-2 text-xs text-slate-500">
-                          已選擇：{commentFile.name}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-600 ring-1 ring-slate-200/70">
-                    先看看大家的留言。想留言、回覆或附圖時，再登入就可以。
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={goLogin}
-                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                      >
-                        前往登入
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CommentsSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        comments={comments}
+        loadingComments={loadingComments}
+        topLevelComments={topLevelComments}
+        repliesByParent={repliesByParent}
+        profilesMap={profilesMap}
+        replyingTo={replyingTo}
+        setReplyingTo={setReplyingTo}
+        replyTextMap={replyTextMap}
+        setReplyTextMap={setReplyTextMap}
+        replyFileMap={replyFileMap}
+        setReplyFileMap={setReplyFileMap}
+        loadingReplyId={loadingReplyId}
+        handleSubmitReply={handleSubmitReply}
+        user={user}
+        myProfile={myProfile}
+        myDisplayName={myDisplayName}
+        commentText={commentText}
+        setCommentText={setCommentText}
+        commentFile={commentFile}
+        setCommentFile={setCommentFile}
+        loadingComment={loadingComment}
+        handleSubmitComment={handleSubmitComment}
+        goLogin={goLogin}
+        replyBoxRefs={replyBoxRefs}
+      />
     </div>
   );
 }
