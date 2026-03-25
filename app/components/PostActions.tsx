@@ -585,7 +585,7 @@ export default function PostActions({ postId }: { postId: number }) {
           } disabled:opacity-60`}
         >
           <span className="text-lg">⚠</span>
-          <span>坑+1</span>
+          <span>坑</span>
           <span className="ml-1 text-slate-400">{pitCount}</span>
         </button>
 
@@ -628,14 +628,14 @@ export default function PostActions({ postId }: { postId: number }) {
             onClick={() => setSheetOpen(false)}
           />
 
-          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-2xl">
+          <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-4xl px-3 sm:px-4">
             <div className="flex max-h-[84vh] flex-col overflow-hidden rounded-t-[32px] border border-slate-200/70 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.22)]">
               <div className="sticky top-0 z-10 rounded-t-[32px] border-b border-slate-100 bg-white/95 backdrop-blur">
                 <div className="flex justify-center pt-3">
                   <div className="h-1.5 w-12 rounded-full bg-slate-300/90" />
                 </div>
 
-                <div className="flex items-center justify-between px-4 pb-3 pt-2">
+                <div className="flex items-center justify-between px-4 pb-3 pt-2 sm:px-6">
                   <div className="text-sm font-semibold text-slate-900">
                     留言 {comments.length > 0 ? `(${comments.length})` : ""}
                   </div>
@@ -650,7 +650,7 @@ export default function PostActions({ postId }: { postId: number }) {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
                 {loadingComments ? (
                   <div className="text-sm text-slate-400">載入留言中...</div>
                 ) : topLevelComments.length === 0 ? (
@@ -835,7 +835,7 @@ export default function PostActions({ postId }: { postId: number }) {
                 )}
               </div>
 
-              <div className="border-t border-slate-100 bg-white px-4 py-3">
+              <div className="border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
                 {user ? (
                   <div className="flex items-start gap-3">
                     {myProfile?.avatar_url ? (
