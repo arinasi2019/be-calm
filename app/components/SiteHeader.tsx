@@ -20,6 +20,7 @@ type AuthUser = {
   email?: string | null;
   user_metadata?: {
     avatar_url?: string | null;
+    picture?: string | null;
     full_name?: string | null;
     name?: string | null;
     user_name?: string | null;
@@ -110,7 +111,12 @@ export default function SiteHeader() {
   }, []);
 
   const avatarUrl = useMemo(() => {
-    return profile?.avatar_url || user?.user_metadata?.avatar_url || null;
+    return (
+      profile?.avatar_url ||
+      user?.user_metadata?.avatar_url ||
+      user?.user_metadata?.picture ||
+      null
+    );
   }, [profile, user]);
 
   const displayName = useMemo(() => {
@@ -135,17 +141,17 @@ export default function SiteHeader() {
   return (
     <header className="mb-6">
       <div className="rounded-[32px] border border-slate-200 bg-white/95 px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:px-6">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-4">
           <Link
             href="/"
             className="min-w-0 flex items-center gap-4 transition hover:opacity-90"
           >
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-slate-200 sm:h-24 sm:w-24">
+            <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white sm:h-24 sm:w-24">
               <Image
                 src="/becalm-main-logo.png"
                 alt="避坑 BeCalm Logo"
                 fill
-                className="object-cover"
+                className="object-contain p-1"
                 sizes="(max-width: 640px) 80px, 96px"
                 priority
               />
@@ -184,6 +190,7 @@ export default function SiteHeader() {
                       src={avatarUrl}
                       alt={displayName}
                       className="h-20 w-20 rounded-full object-cover ring-2 ring-slate-100 sm:h-24 sm:w-24"
+                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-2 ring-slate-100 sm:h-24 sm:w-24">
@@ -207,6 +214,7 @@ export default function SiteHeader() {
                             src={avatarUrl}
                             alt={displayName}
                             className="h-12 w-12 rounded-full object-cover"
+                            referrerPolicy="no-referrer"
                           />
                         ) : (
                           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-600">
