@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   LogOut,
   PenSquare,
-  Search,
   User,
   ChevronDown,
 } from "lucide-react";
@@ -161,15 +160,6 @@ export default function SiteHeader() {
 
           <div className="flex shrink-0 items-center gap-3">
             <Link
-              href="/search"
-              aria-label="搜尋"
-              title="搜尋"
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-900"
-            >
-              <Search className="h-7 w-7" />
-            </Link>
-
-            <Link
               href="/write"
               className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-6 py-4 text-base font-bold text-white transition hover:bg-[#13214a] sm:inline-flex"
             >
@@ -249,15 +239,6 @@ export default function SiteHeader() {
                       >
                         <PenSquare className="h-4 w-4" />
                         發表貼文
-                      </Link>
-
-                      <Link
-                        href="/search"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
-                      >
-                        <Search className="h-4 w-4" />
-                        搜尋內容
                       </Link>
 
                       <button
