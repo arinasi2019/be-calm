@@ -130,10 +130,15 @@ export default function SiteHeader() {
   }, [profile, user]);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
-    setMenuOpen(false);
-    router.refresh();
-    router.push("/");
+    try {
+      await supabase.auth.signOut();
+      setMenuOpen(false);
+      router.refresh();
+      router.push("/");
+    } catch (error) {
+      console.error("登出失敗:", error);
+      alert("登出失敗，請再試一次");
+    }
   }
 
   return (
