@@ -58,7 +58,7 @@ type RankedPost = Post & {
   trendScore: number;
 };
 
-type FeedMode = "推薦" | "最新" | "最熱" | "爆雷中";
+type FeedMode = "最新" | "最熱" | "爆雷中";
 
 function getHoursAgo(dateString: string | null) {
   if (!dateString) return 999999;
@@ -118,7 +118,7 @@ function RankingBlock({
 
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-2 text-sm font-bold leading-5 text-slate-900">
-                    {post.title}
+                    {post.place_name || post.title}
                   </div>
 
                   <div className="mt-1 line-clamp-1 text-xs text-slate-500">
@@ -183,7 +183,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [selectedCountry, setSelectedCountry] = useState("全部");
   const [selectedCity, setSelectedCity] = useState("全部");
-  const [feedMode, setFeedMode] = useState<FeedMode>("推薦");
+  const [feedMode, setFeedMode] = useState<FeedMode>("爆雷中");
 
   const [showFilterBar, setShowFilterBar] = useState(true);
   const lastScrollYRef = useRef(0);
@@ -334,7 +334,16 @@ export default function HomePage() {
   );
 
   const trending = useMemo(
-    () => [...filteredPosts].sort((a, b) => b.trendScore - a.trendScore).slice(0, 5),
+    () =>
+      [...filteredPosts]
+        .sort((a, b) => {
+          if (b.trendScore !== a.trendScore) return b.trendScore - a.trendScore;
+
+          const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return bt - at;
+        })
+        .slice(0, 5),
     [filteredPosts]
   );
 
@@ -350,17 +359,21 @@ export default function HomePage() {
     }
 
     if (feedMode === "最熱") {
-      return sorted.sort((a, b) => b.hotScore - a.hotScore);
-    }
+      return sorted.sort((a, b) => {
+        if (b.hotScore !== a.hotScore) return b.hotScore - a.hotScore;
 
-    if (feedMode === "爆雷中") {
-      return sorted.sort((a, b) => b.trendScore - a.trendScore);
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bt - at;
+      });
     }
 
     return sorted.sort((a, b) => {
-      const scoreA = a.hotScore * 0.55 + a.trendScore * 0.45;
-      const scoreB = b.hotScore * 0.55 + b.trendScore * 0.45;
-      return scoreB - scoreA;
+      if (b.trendScore !== a.trendScore) return b.trendScore - a.trendScore;
+
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bt - at;
     });
   }, [filteredPosts, feedMode]);
 
@@ -424,7 +437,7 @@ export default function HomePage() {
           <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {(["推薦", "最新", "最熱", "爆雷中"] as FeedMode[]).map((mode) => (
+                {(["爆雷中", "最熱", "最新"] as FeedMode[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setFeedMode(mode)}
@@ -527,13 +540,13 @@ export default function HomePage() {
             <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <div className="flex gap-3 px-1">
                 <div className="w-[280px] shrink-0">
+                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
+                </div>
+                <div className="w-[280px] shrink-0">
                   <RankingBlock title="🔥 全站最坑" colorClass="text-rose-600" posts={allTimeHot} metricLabel="坑" />
                 </div>
                 <div className="w-[280px] shrink-0">
                   <RankingBlock title="💬 討論最多" colorClass="text-sky-600" posts={mostDiscussed} metricLabel="留言" />
-                </div>
-                <div className="w-[280px] shrink-0">
-                  <RankingBlock title="⚡ 最近爆雷" colorClass="text-amber-600" posts={trending} metricLabel="熱度" />
                 </div>
                 <div className="w-[280px] shrink-0">
                   <RankingBlock title="🆕 最新踩雷" colorClass="text-slate-900" posts={latestPosts} metricLabel="坑" />

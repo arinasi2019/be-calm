@@ -109,7 +109,6 @@ function getMediaList(post: Post): MediaItem[] {
   }
 
   const fallback: MediaItem[] = [];
-
   if (post.video_url) fallback.push({ type: "video", url: post.video_url });
   if (post.image_url) fallback.push({ type: "image", url: post.image_url });
 
@@ -145,7 +144,6 @@ function getAuthorName(post: Post) {
   }
 
   const profile = post.author_profile;
-
   if (profile?.display_name?.trim()) return profile.display_name.trim();
   if (profile?.username?.trim()) return profile.username.trim();
   if (profile?.email?.trim()) return profile.email.split("@")[0];
@@ -158,11 +156,9 @@ function getAuthorInitial(post: Post) {
 
 function formatPrice(price?: number | null, country?: string | null) {
   if (price == null || Number.isNaN(price)) return null;
-
   if (country === "日本") return `¥${price.toLocaleString("ja-JP")} 起`;
   if (country === "台灣") return `NT$${price.toLocaleString("zh-TW")} 起`;
   if (country === "澳洲") return `A$${price.toLocaleString("en-AU")} 起`;
-
   return `$${price.toLocaleString()} 起`;
 }
 
@@ -185,7 +181,6 @@ function getPitfallSummary(post: Post) {
   }
 
   const items: string[] = [];
-
   if (post.risk_level === "高") items.push("風險偏高，建議先看清楚內容");
   if (post.risk_level === "中") items.push("評價偏兩極，建議先自行判斷");
   if (post.google_maps_url) items.push("可先查看 Google 店家資訊");
@@ -201,7 +196,7 @@ function ShareButtons({ post }: { post: Post }) {
       ? `${window.location.origin}/post/${post.id}`
       : `/post/${post.id}`;
 
-  const shareText = `${post.title}｜避坑 Be Calm`;
+  const shareText = `${post.place_name || post.title}｜避坑 Be Calm`;
 
   async function handleShare() {
     try {
@@ -384,7 +379,7 @@ function MediaRail({
           {media.type === "image" ? (
             <img
               src={media.url}
-              alt={post.title}
+              alt={post.place_name || post.title}
               className="block h-[320px] w-full cursor-zoom-in object-cover sm:h-[420px] lg:h-[520px]"
               onClick={() => onOpenMedia(mediaList, 0)}
             />
@@ -419,7 +414,7 @@ function MediaRail({
               {media.type === "image" ? (
                 <img
                   src={media.url}
-                  alt={`${post.title}-${index}`}
+                  alt={`${post.place_name || post.title}-${index}`}
                   className="h-72 w-full cursor-zoom-in object-cover sm:h-80"
                   onClick={() => onOpenMedia(mediaList, index)}
                 />
@@ -515,7 +510,9 @@ function SearchModal({
                   className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-sm font-bold text-slate-900">{post.title}</div>
+                    <div className="text-base font-bold text-slate-900">
+                      {post.place_name || post.title}
+                    </div>
 
                     {post.category === "人物/事件" && (
                       <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
@@ -524,10 +521,14 @@ function SearchModal({
                     )}
                   </div>
 
+                  {post.place_name && post.title && (
+                    <div className="mt-1 text-sm text-slate-700">{post.title}</div>
+                  )}
+
                   <div className="mt-1 text-xs text-slate-500">作者：{getAuthorName(post)}</div>
 
                   <div className="mt-1 text-xs text-slate-500">
-                    {post.place_name || post.location || post.category}
+                    {post.location || post.category}
                     {post.incident_type ? ` · ${post.incident_type}` : ""}
                   </div>
 
@@ -703,12 +704,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
     return posts.filter((post) => {
       const authorName = getAuthorName(post).toLowerCase();
+      const searchName = (post.place_name || "").toLowerCase();
 
       return (
+        searchName.includes(q) ||
         post.title?.toLowerCase().includes(q) ||
         post.content?.toLowerCase().includes(q) ||
         (post.location || "").toLowerCase().includes(q) ||
-        (post.place_name || "").toLowerCase().includes(q) ||
         post.category?.toLowerCase().includes(q) ||
         (post.country || "").toLowerCase().includes(q) ||
         (post.city || "").toLowerCase().includes(q) ||
@@ -919,6 +921,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const shouldTruncate = post.content.length > 160;
               const authorName = getAuthorName(post);
               const displayPlace = post.place_name || post.location || null;
+              const hasSubTitle = Boolean(post.place_name && post.title && post.place_name !== post.title);
 
               return (
                 <article
@@ -1028,9 +1031,15 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                   </div>
 
                   <Link href={`/post/${post.id}`} className="mt-4 block">
-                    <h2 className="text-[28px] font-black leading-tight tracking-[-0.02em] text-slate-900 hover:text-slate-700 sm:text-[32px]">
-                      {post.title}
+                    <h2 className="text-[30px] font-black leading-tight tracking-[-0.02em] text-slate-900 hover:text-slate-700 sm:text-[36px]">
+                      {post.place_name || post.title}
                     </h2>
+
+                    {hasSubTitle && (
+                      <div className="mt-2 text-lg font-semibold leading-7 text-slate-700 sm:text-xl">
+                        {post.title}
+                      </div>
+                    )}
                   </Link>
 
                   {isIncidentPost && (post.incident_type || post.risk_level) && (
@@ -1078,12 +1087,6 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
 
                   <div className="mt-5 flex items-center gap-4 border-t border-slate-100 pt-4">
                     <ShareButtons post={post} />
-                    <Link
-                      href={`/post/${post.id}`}
-                      className="text-sm font-medium text-slate-500 hover:text-slate-900"
-                    >
-                      查看文章頁
-                    </Link>
                   </div>
 
                   <PostActions postId={post.id} />
