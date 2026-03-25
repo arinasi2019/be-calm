@@ -58,7 +58,7 @@ type RankedPost = Post & {
   trendScore: number;
 };
 
-type FeedMode = "最新" | "最熱" | "爆雷中";
+type FeedMode = "最新" | "爆雷中" | "最熱";
 
 function getHoursAgo(dateString: string | null) {
   if (!dateString) return 999999;
@@ -183,7 +183,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("全部");
   const [selectedCountry, setSelectedCountry] = useState("全部");
   const [selectedCity, setSelectedCity] = useState("全部");
-  const [feedMode, setFeedMode] = useState<FeedMode>("爆雷中");
+  const [feedMode, setFeedMode] = useState<FeedMode>("最新");
 
   const [showFilterBar, setShowFilterBar] = useState(true);
   const lastScrollYRef = useRef(0);
@@ -437,7 +437,7 @@ export default function HomePage() {
           <div className="border-t border-white/10 bg-black/10 px-4 py-3 sm:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {(["爆雷中", "最熱", "最新"] as FeedMode[]).map((mode) => (
+                {(["最新", "爆雷中", "最熱"] as FeedMode[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setFeedMode(mode)}
