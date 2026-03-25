@@ -591,6 +591,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
   const [hasHandledHashScroll, setHasHandledHashScroll] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabType>("home");
+  const [savedIds, setSavedIds] = useState<number[]>([]);
+  const [savedLoading, setSavedLoading] = useState(true);
 
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -616,6 +618,36 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       window.removeEventListener("becalm-open-search", handleOpenSearch);
     };
   }, []);
+
+  useEffect(() => {
+    async function loadSavedPosts() {
+      if (!user) {
+        setSavedIds([]);
+        setSavedLoading(false);
+        return;
+      }
+
+      setSavedLoading(true);
+
+      const { data, error } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("載入收藏失敗：", error.message);
+        setSavedIds([]);
+        setSavedLoading(false);
+        return;
+      }
+
+      const ids = ((data ?? []) as { post_id: number }[]).map((item) => item.post_id);
+      setSavedIds(ids);
+      setSavedLoading(false);
+    }
+
+    loadSavedPosts();
+  }, [user]);
 
   useEffect(() => {
     let ticking = false;
@@ -658,6 +690,12 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     });
   }, [posts, query]);
 
+  const savedPosts = useMemo(() => {
+    return posts.filter((post) => savedIds.includes(post.id));
+  }, [posts, savedIds]);
+
+  const sourcePosts = activeTab === "saved" ? savedPosts : posts;
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -667,11 +705,11 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     const id = Number(hash.replace("#post-", ""));
     if (!id) return;
 
-    const index = posts.findIndex((post) => post.id === id);
+    const index = sourcePosts.findIndex((post) => post.id === id);
     if (index >= 0) {
       setVisibleCount((prev) => Math.max(prev, index + 1));
     }
-  }, [posts]);
+  }, [sourcePosts]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -689,7 +727,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [posts, visibleCount, hasHandledHashScroll]);
+  }, [sourcePosts, visibleCount, hasHandledHashScroll]);
 
   function handleTabChange(tab: TabType) {
     if (tab === "search") {
@@ -697,6 +735,13 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
       setActiveTab("home");
       return;
     }
+
+    if (tab === "saved" && !user) {
+      alert("請先登入後再查看收藏");
+      router.push("/login");
+      return;
+    }
+
     setActiveTab(tab);
   }
 
@@ -766,7 +811,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     setPullDistance(0);
   }
 
-  const displayPosts = posts.slice(0, visibleCount);
+  const displayPosts = sourcePosts.slice(0, visibleCount);
 
   return (
     <>
@@ -800,9 +845,15 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
           )}
         </div>
 
-        {displayPosts.length === 0 ? (
+        {savedLoading && activeTab === "saved" ? (
           <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
-            目前還沒有貼文，來發第一篇吧。
+            載入收藏中...
+          </div>
+        ) : displayPosts.length === 0 ? (
+          <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
+            {activeTab === "saved"
+              ? "你目前還沒有收藏貼文"
+              : "目前還沒有貼文，來發第一篇吧。"}
           </div>
         ) : (
           <>
@@ -970,7 +1021,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               );
             })}
 
-            {displayPosts.length < posts.length && (
+            {displayPosts.length < sourcePosts.length && (
               <div className="text-center text-sm text-slate-500">往下滑可載入更多內容</div>
             )}
           </>
