@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, PenSquare, User, ChevronDown } from "lucide-react";
@@ -9,123 +8,49 @@ import { supabase } from "../lib/supabase";
 
 type ProfileRow = {
   id: string;
-  email?: string | null;
-  username?: string | null;
   display_name?: string | null;
+  username?: string | null;
   avatar_url?: string | null;
-};
-
-type AuthUser = {
-  id: string;
-  email?: string | null;
-  user_metadata?: {
-    avatar_url?: string | null;
-    picture?: string | null;
-    full_name?: string | null;
-    name?: string | null;
-    user_name?: string | null;
-  };
 };
 
 export default function SiteHeader() {
   const router = useRouter();
 
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
     async function loadUser() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!mounted) return;
-      setUser((user as AuthUser | null) ?? null);
+      setUser(user);
 
       if (user?.id) {
         const { data } = await supabase
           .from("profiles")
-          .select("id, email, username, display_name, avatar_url")
+          .select("id, display_name, username, avatar_url")
           .eq("id", user.id)
-          .maybeSingle();
+          .single();
 
-        if (!mounted) return;
-        setProfile((data as ProfileRow | null) ?? null);
-      } else {
-        setProfile(null);
+        setProfile(data);
       }
     }
 
     loadUser();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const nextUser = (session?.user as AuthUser | null) ?? null;
-      setUser(nextUser);
-
-      if (nextUser?.id) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, email, username, display_name, avatar_url")
-          .eq("id", nextUser.id)
-          .maybeSingle();
-
-        setProfile((data as ProfileRow | null) ?? null);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEscape);
-    };
   }, []);
 
   const avatarUrl = useMemo(() => {
-    return (
-      profile?.avatar_url ||
-      user?.user_metadata?.avatar_url ||
-      user?.user_metadata?.picture ||
-      null
-    );
+    return profile?.avatar_url || user?.user_metadata?.avatar_url || null;
   }, [profile, user]);
 
   const displayName = useMemo(() => {
     return (
       profile?.display_name ||
       profile?.username ||
-      user?.user_metadata?.full_name ||
-      user?.user_metadata?.name ||
-      user?.user_metadata?.user_name ||
       user?.email ||
       "使用者"
     );
@@ -133,156 +58,119 @@ export default function SiteHeader() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    setMenuOpen(false);
     router.refresh();
     router.push("/");
   };
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <header className="mb-6">
-      <div className="rounded-[32px] border border-slate-200 bg-white/95 px-4 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-md sm:px-6">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="min-w-0 flex items-center gap-4 transition hover:opacity-90"
-          >
-            <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-white sm:h-24 sm:w-24">
-              <Image
-                src="/becalm-main-logo.png"
-                alt="避坑 BeCalm Logo"
-                fill
-                className="object-contain p-1"
-                sizes="(max-width: 640px) 80px, 96px"
-                priority
-              />
+      <div className="rounded-[32px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div className="flex items-center justify-between">
+
+          {/* 左側品牌 */}
+          <Link href="/" className="flex items-center gap-4">
+
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#0b1736] text-3xl font-black text-white">
+              坑
             </div>
 
-            <div className="min-w-0">
-              <div className="truncate text-3xl font-black leading-none text-slate-900 sm:text-5xl">
+            <div>
+              <div className="text-2xl font-black text-slate-900">
                 避坑 BeCalm
               </div>
-              <div className="mt-2 truncate text-lg font-medium text-slate-500 sm:text-2xl">
+
+              <div className="text-sm text-slate-500">
                 不種草，只避雷
               </div>
             </div>
+
           </Link>
 
-          <div className="flex shrink-0 items-center gap-3">
+          {/* 右側 */}
+          <div className="flex items-center gap-3">
+
             <Link
               href="/write"
-              className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-6 py-4 text-base font-bold text-white transition hover:bg-[#13214a] sm:inline-flex"
+              className="flex items-center gap-2 rounded-full bg-[#0b1736] px-4 py-2 text-sm font-bold text-white"
             >
-              <PenSquare className="h-5 w-5" />
+              <PenSquare size={16} />
               發文
             </Link>
 
             {user ? (
               <div className="relative" ref={menuRef}>
+
                 <button
-                  type="button"
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-full transition"
-                  aria-label="開啟個人選單"
-                  aria-expanded={menuOpen}
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="flex items-center gap-1"
                 >
                   {avatarUrl ? (
                     <img
                       src={avatarUrl}
-                      alt={displayName}
-                      className="h-20 w-20 rounded-full object-cover ring-2 ring-slate-100 sm:h-24 sm:w-24"
-                      referrerPolicy="no-referrer"
+                      className="h-10 w-10 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-2 ring-slate-100 sm:h-24 sm:w-24">
-                      <User className="h-9 w-9 sm:h-10 sm:w-10" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200">
+                      <User size={18} />
                     </div>
                   )}
 
-                  <ChevronDown
-                    className={`hidden h-5 w-5 text-slate-500 transition sm:block ${
-                      menuOpen ? "rotate-180" : ""
-                    }`}
-                  />
+                  <ChevronDown size={16} />
                 </button>
 
                 {menuOpen && (
-                  <div className="absolute right-0 top-[92px] z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] sm:top-[108px]">
-                    <div className="border-b border-slate-100 px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt={displayName}
-                            className="h-12 w-12 rounded-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                            <User className="h-6 w-6" />
-                          </div>
-                        )}
+                  <div className="absolute right-0 mt-3 w-56 rounded-xl border bg-white shadow-lg">
 
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-bold text-slate-900">
-                            {displayName}
-                          </div>
-                          <div className="truncate text-xs text-slate-500">
-                            {user.email || "已登入使用者"}
-                          </div>
-                        </div>
-                      </div>
+                    <div className="border-b px-4 py-3 text-sm">
+                      {displayName}
                     </div>
 
-                    <div className="p-2">
-                      <Link
-                        href="/profile"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
-                      >
-                        <User className="h-4 w-4" />
-                        我的個人頁
-                      </Link>
+                    <Link
+                      href="/profile"
+                      className="block px-4 py-3 text-sm hover:bg-slate-50"
+                    >
+                      我的個人頁
+                    </Link>
 
-                      <Link
-                        href="/write"
-                        onClick={() => setMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
-                      >
-                        <PenSquare className="h-4 w-4" />
-                        發表貼文
-                      </Link>
+                    <Link
+                      href="/write"
+                      className="block px-4 py-3 text-sm hover:bg-slate-50"
+                    >
+                      發表貼文
+                    </Link>
 
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        登出
-                      </button>
-                    </div>
+                    <button
+                      onClick={handleSignOut}
+                      className="block w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50"
+                    >
+                      登出
+                    </button>
+
                   </div>
                 )}
               </div>
             ) : (
               <Link
                 href="/login"
-                className="flex h-12 items-center justify-center rounded-full bg-slate-100 px-5 text-sm font-bold text-slate-700 transition hover:bg-slate-200 sm:h-14"
+                className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold"
               >
                 登入
               </Link>
             )}
-          </div>
-        </div>
 
-        <div className="mt-4 sm:hidden">
-          <Link
-            href="/write"
-            className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0b1736] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#13214a]"
-          >
-            <PenSquare className="h-4 w-4" />
-            發文
-          </Link>
+          </div>
         </div>
       </div>
     </header>
