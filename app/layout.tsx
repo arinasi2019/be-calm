@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AuthProvider from "./components/AuthProvider";
 
 export const metadata: Metadata = {
   title: "避坑 BeCalm｜餐廳、旅遊、商品踩雷分享平台",
@@ -53,8 +54,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-TW">
-      <head />
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
