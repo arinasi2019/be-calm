@@ -623,6 +623,25 @@ export default function HomePage() {
               <PostFeed posts={displayPosts} />
             </section>
           </div>
+
+          <section className="mx-auto max-w-4xl px-1 pb-16 pt-10 text-sm leading-relaxed text-slate-600">
+            <h2 className="mb-3 text-lg font-bold text-slate-900">關於避坑 BeCalm</h2>
+
+            <p className="mb-3">
+              避坑 BeCalm 是一個分享真實消費踩雷經驗的平台，讓用戶可以分享餐廳、旅遊、
+              購物、住宿與各種服務的真實負面體驗，幫助其他人避免踩坑。
+            </p>
+
+            <p className="mb-3">
+              在這裡，你可以查看其他人遇到的消費陷阱，例如餐廳雷店、旅遊地雷、
+              不值得購買的商品、服務品質不佳的商家，以及各種人物事件警示資訊。
+            </p>
+
+            <p>
+              我們希望建立一個透明的資訊平台，讓大家在消費前先了解風險，
+              查真實踩雷經驗，先避坑，再花錢。
+            </p>
+          </section>
         </div>
       </main>
 
