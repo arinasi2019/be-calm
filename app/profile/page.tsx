@@ -99,56 +99,63 @@ export default function ProfilePage() {
 
     setUploading(true);
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/avatar.${ext}`;
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${user.id}/avatar.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, {
-        upsert: true,
-        contentType: file.type,
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        console.error("avatar upload error:", uploadError);
+        alert("頭像上傳失敗：" + uploadError.message);
+        setUploading(false);
+        return;
+      }
+
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+      const { error: updateError } = await supabase.from("profiles").upsert({
+        id: user.id,
+        email: user.email ?? null,
+        avatar_url: publicUrl,
+        display_name: displayName.trim() || null,
+        username: username.trim() || null,
       });
 
-    if (uploadError) {
-      console.error("avatar upload error:", uploadError);
-      alert("頭像上傳失敗：" + uploadError.message);
+      if (updateError) {
+        console.error("profile avatar update error:", updateError);
+        alert("更新頭像失敗：" + updateError.message);
+        setUploading(false);
+        return;
+      }
+
+      setAvatarUrl(publicUrl);
+      setProfile((prev) =>
+        prev
+          ? { ...prev, avatar_url: publicUrl }
+          : {
+              id: user.id,
+              email: user.email ?? null,
+              display_name: displayName.trim() || null,
+              username: username.trim() || null,
+              avatar_url: publicUrl,
+            }
+      );
+
       setUploading(false);
-      return;
-    }
-
-    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
-
-    const { error: updateError } = await supabase.from("profiles").upsert({
-      id: user.id,
-      email: user.email ?? null,
-      avatar_url: publicUrl,
-      display_name: displayName.trim() || null,
-      username: username.trim() || null,
-    });
-
-    if (updateError) {
-      console.error("profile avatar update error:", updateError);
-      alert("更新頭像失敗：" + updateError.message);
+      router.refresh();
+      alert("頭像已更新");
+    } catch (error: any) {
+      console.error("handleUploadAvatar unexpected error:", error);
       setUploading(false);
-      return;
+      alert("頭像上傳失敗：" + (error?.message || "未知錯誤"));
     }
-
-    setAvatarUrl(publicUrl);
-    setProfile((prev) =>
-      prev
-        ? { ...prev, avatar_url: publicUrl }
-        : {
-            id: user.id,
-            email: user.email ?? null,
-            display_name: displayName.trim() || null,
-            username: username.trim() || null,
-            avatar_url: publicUrl,
-          }
-    );
-
-    setUploading(false);
-    alert("頭像已更新");
   }
 
   async function handleSave() {
@@ -172,7 +179,6 @@ export default function ProfilePage() {
       return;
     }
 
-    alert("會員資料已更新");
     setProfile((prev) =>
       prev
         ? {
@@ -190,6 +196,9 @@ export default function ProfilePage() {
             avatar_url: avatarUrl || null,
           }
     );
+
+    router.refresh();
+    alert("會員資料已更新");
   }
 
   if (loading || !user) {
@@ -226,6 +235,7 @@ export default function ProfilePage() {
                 src={avatarUrl}
                 alt={currentName}
                 className="h-20 w-20 rounded-full object-cover ring-1 ring-slate-200"
+                referrerPolicy="no-referrer"
               />
             ) : (
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 text-2xl font-bold text-white">

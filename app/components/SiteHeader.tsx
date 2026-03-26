@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, PenSquare, User } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "./AuthProvider";
 
 type ProfileRow = {
   id: string;
@@ -13,77 +14,47 @@ type ProfileRow = {
   avatar_url?: string | null;
 };
 
-type AuthUser = {
-  id: string;
-  email?: string | null;
-  user_metadata?: {
-    avatar_url?: string | null;
-    picture?: string | null;
-    full_name?: string | null;
-    name?: string | null;
-    user_name?: string | null;
-  };
-};
-
 export default function SiteHeader() {
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const { user, loading, signOut } = useAuth();
 
-  const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    async function loadUserAndProfile() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    async function loadProfile() {
+      if (!user?.id) {
+        if (!active) return;
+        setProfile(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, display_name, username, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle();
 
       if (!active) return;
-      setUser((user as AuthUser | null) ?? null);
 
-      if (user?.id) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (!active) return;
-        setProfile((data as ProfileRow | null) ?? null);
-      } else {
+      if (error) {
+        console.error("SiteHeader load profile error:", error);
         setProfile(null);
+        return;
       }
+
+      setProfile((data as ProfileRow | null) ?? null);
     }
 
-    loadUserAndProfile();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const nextUser = (session?.user as AuthUser | null) ?? null;
-      setUser(nextUser);
-
-      if (nextUser?.id) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, avatar_url")
-          .eq("id", nextUser.id)
-          .maybeSingle();
-
-        setProfile((data as ProfileRow | null) ?? null);
-      } else {
-        setProfile(null);
-      }
-    });
+    loadProfile();
 
     return () => {
       active = false;
-      subscription.unsubscribe();
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -131,7 +102,7 @@ export default function SiteHeader() {
 
   async function handleSignOut() {
     try {
-      await supabase.auth.signOut();
+      await signOut();
       setMenuOpen(false);
       router.refresh();
       router.push("/");
@@ -172,7 +143,7 @@ export default function SiteHeader() {
             發文
           </Link>
 
-          {user ? (
+          {!loading && user ? (
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
@@ -238,12 +209,14 @@ export default function SiteHeader() {
               )}
             </div>
           ) : (
-            <Link
-              href="/login"
-              className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700"
-            >
-              登入
-            </Link>
+            !loading && (
+              <Link
+                href="/login"
+                className="rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700"
+              >
+                登入
+              </Link>
+            )
           )}
         </div>
       </div>

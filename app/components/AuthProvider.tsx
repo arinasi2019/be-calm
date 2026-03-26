@@ -34,11 +34,16 @@ export default function AuthProvider({
     async function init() {
       const {
         data: { session },
+        error,
       } = await supabase.auth.getSession();
 
       if (!mounted) return;
 
-      setSession(session);
+      if (error) {
+        console.error("AuthProvider getSession error:", error);
+      }
+
+      setSession(session ?? null);
       setUser(session?.user ?? null);
       setLoading(false);
     }
@@ -48,7 +53,8 @@ export default function AuthProvider({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      if (!mounted) return;
+      setSession(session ?? null);
       setUser(session?.user ?? null);
       setLoading(false);
     });
@@ -60,7 +66,11 @@ export default function AuthProvider({
   }, []);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("AuthProvider signOut error:", error);
+      throw error;
+    }
   }
 
   const value = useMemo(
