@@ -113,8 +113,8 @@ export default function SiteHeader() {
   }
 
   return (
-    <header className="mb-6 px-4 pt-4">
-      <div className="mx-auto flex max-w-6xl items-center justify-between rounded-[32px] border border-slate-200 bg-white px-5 py-5 shadow-sm">
+    <header className="mb-6">
+      <div className="flex items-center justify-between rounded-[32px] border border-slate-200 bg-white px-5 py-5 shadow-sm">
         <Link href="/" className="flex min-w-0 items-center gap-4">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
             <img
