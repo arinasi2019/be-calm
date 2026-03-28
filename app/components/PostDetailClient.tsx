@@ -46,6 +46,7 @@ type Post = {
   price_from?: number | null;
   try_button_label?: string | null;
   pitfall_summary?: string[] | null;
+  hashtags?: string[] | null;
   author_profile?: Profile | null;
   pitCount?: number;
   commentCount?: number;
@@ -169,6 +170,11 @@ function getPitfallSummary(post: Post) {
   if (post.external_url && post.category === "旅遊") items.push("預訂前建議再確認細節");
 
   return items.slice(0, 3);
+}
+
+function getDisplayHashtags(post: Post) {
+  if (!Array.isArray(post.hashtags)) return [];
+  return post.hashtags.filter(Boolean).slice(0, 10);
 }
 
 function ShareButtons({ post }: { post: Post }) {
@@ -507,6 +513,7 @@ export default function PostDetailClient({ post }: { post: Post }) {
 
   const displayPlace = post.place_name || post.location || null;
   const isIncidentPost = post.category === "人物/事件" || post.content_type === "incident";
+  const hashtagList = getDisplayHashtags(post);
 
   const [lightboxMedia, setLightboxMedia] = useState<MediaItem[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -712,6 +719,20 @@ export default function PostDetailClient({ post }: { post: Post }) {
             <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
               {post.content}
             </div>
+
+            {hashtagList.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {hashtagList.map((tag) => (
+                  <Link
+                    key={tag}
+                    href={`/tag/${encodeURIComponent(tag)}`}
+                    className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+                  >
+                    #{tag}
+                  </Link>
+                ))}
+              </div>
+            )}
 
             <MediaRail post={post} onOpenMedia={openLightbox} />
 

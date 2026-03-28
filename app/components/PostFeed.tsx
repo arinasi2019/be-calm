@@ -53,6 +53,7 @@ type Post = {
   price_from?: number | null;
   try_button_label?: string | null;
   pitfall_summary?: string[] | null;
+  hashtags?: string[] | null;
 };
 
 type TabType = "home" | "search" | "saved";
@@ -190,6 +191,11 @@ function getPitfallSummary(post: Post) {
   return items.slice(0, 3);
 }
 
+function getDisplayHashtags(post: Post) {
+  if (!Array.isArray(post.hashtags)) return [];
+  return post.hashtags.filter(Boolean).slice(0, 6);
+}
+
 function MediaRail({
   post,
   onOpenMedia,
@@ -313,7 +319,7 @@ function SearchModal({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜尋店家、商品、地點、標題、內容、事件類型..."
+              placeholder="搜尋店家、商品、地點、標題、內容、hashtag、事件類型..."
               className="min-w-0 w-full max-w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
             />
 
@@ -362,6 +368,19 @@ function SearchModal({
                     {post.location || post.category}
                     {post.incident_type ? ` · ${post.incident_type}` : ""}
                   </div>
+
+                  {getDisplayHashtags(post).length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {getDisplayHashtags(post).map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] text-sky-700"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="mt-2 line-clamp-2 text-sm text-slate-600">{post.content}</div>
                 </Link>
@@ -685,7 +704,8 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         (post.country || "").toLowerCase().includes(q) ||
         (post.city || "").toLowerCase().includes(q) ||
         (post.incident_type || "").toLowerCase().includes(q) ||
-        authorName.includes(q)
+        authorName.includes(q) ||
+        (post.hashtags || []).some((tag) => tag.toLowerCase().includes(q))
       );
     });
   }, [posts, query]);
@@ -864,6 +884,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
               const authorName = getAuthorName(post);
               const displayPlace = post.place_name || post.location || null;
               const hasSubTitle = Boolean(post.place_name && post.title && post.place_name !== post.title);
+              const hashtagList = getDisplayHashtags(post);
 
               return (
                 <article
@@ -1011,6 +1032,20 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
                       </button>
                     )}
                   </div>
+
+                  {hashtagList.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {hashtagList.map((tag) => (
+                        <Link
+                          key={tag}
+                          href={`/tag/${encodeURIComponent(tag)}`}
+                          className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+                        >
+                          #{tag}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
 
                   <MediaRail post={post} onOpenMedia={openLightbox} />
 

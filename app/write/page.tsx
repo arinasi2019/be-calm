@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import imageCompression from "browser-image-compression";
@@ -38,6 +38,46 @@ type MediaItem = {
   type: "image" | "video";
   url: string;
 };
+
+function normalizeHashtagTag(tag: string) {
+  return tag
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[，、。,.!?！？”“"'`()\[\]{}<>/\\]/g, "")
+    .toLowerCase();
+}
+
+function extractHashtagsFromPost(params: {
+  title: string;
+  content: string;
+  category: string;
+  country: string;
+  city: string;
+  location: string;
+  placeName: string;
+  incidentType?: string;
+}) {
+  const manualMatches = `${params.title} ${params.content}`.match(/#[\p{L}\p{N}_-]+/gu) || [];
+
+  const manualTags = manualMatches.map(normalizeHashtagTag).filter(Boolean);
+
+  const autoTags = [
+    params.category,
+    params.country,
+    params.city,
+    params.location,
+    params.placeName,
+    params.incidentType || "",
+    params.category ? `${params.category}避坑` : "",
+    params.country ? `${params.country}避坑` : "",
+    params.city ? `${params.city}避坑` : "",
+  ]
+    .map((item) => normalizeHashtagTag(item || ""))
+    .filter(Boolean);
+
+  return Array.from(new Set([...manualTags, ...autoTags])).slice(0, 20);
+}
 
 export default function WritePage() {
   const router = useRouter();
@@ -122,6 +162,32 @@ export default function WritePage() {
     return uploaded;
   }
 
+  const previewHashtags = useMemo(() => {
+    const finalCountry = country === "其他" ? customCountry.trim() : country;
+
+    return extractHashtagsFromPost({
+      title,
+      content,
+      category,
+      country: finalCountry,
+      city,
+      location,
+      placeName,
+      incidentType: isIncident ? incidentType : "",
+    });
+  }, [
+    title,
+    content,
+    category,
+    country,
+    customCountry,
+    city,
+    location,
+    placeName,
+    incidentType,
+    isIncident,
+  ]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -162,6 +228,17 @@ export default function WritePage() {
     try {
       const finalCountry = country === "其他" ? customCountry.trim() : country;
 
+      const hashtags = extractHashtagsFromPost({
+        title,
+        content,
+        category,
+        country: finalCountry,
+        city,
+        location,
+        placeName,
+        incidentType: isIncident ? incidentType : "",
+      });
+
       let mediaItems: MediaItem[] = [];
 
       if (imageFiles.length > 0) {
@@ -194,6 +271,7 @@ export default function WritePage() {
           google_maps_url: googleMapsUrl || null,
           external_url: externalUrl || null,
           content,
+          hashtags,
           image_url: firstImage,
           video_url: firstVideo,
           media_urls: mediaItems,
@@ -449,12 +527,28 @@ export default function WritePage() {
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="請寫下你實際遇到的問題..."
+                placeholder="請寫下你實際遇到的問題，可直接在內容中輸入 #東京美食 #京都旅遊"
                 rows={7}
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                 required
               />
             </div>
+
+            {previewHashtags.length > 0 && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+                <div className="mb-2 text-sm font-semibold text-slate-900">預覽 hashtag</div>
+                <div className="flex flex-wrap gap-2">
+                  {previewHashtags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-700"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-[24px] border border-orange-200 bg-orange-50/70 p-4">
               <label className="flex items-center gap-3 text-sm font-semibold text-slate-900">
