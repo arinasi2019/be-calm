@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import imageCompression from "browser-image-compression";
@@ -10,11 +10,24 @@ import { useAuth } from "../../components/AuthProvider";
 const COUNTRY_OPTIONS = [
   "日本",
   "台灣",
-  "泰國",
-  "澳洲",
   "韓國",
+  "中國",
   "香港",
   "新加坡",
+  "泰國",
+  "越南",
+  "馬來西亞",
+  "印尼",
+  "菲律賓",
+  "澳洲",
+  "紐西蘭",
+  "美國",
+  "加拿大",
+  "英國",
+  "法國",
+  "德國",
+  "義大利",
+  "西班牙",
   "其他",
 ];
 
@@ -40,6 +53,46 @@ const ADMIN_EMAILS = [
   "liam@arinasi.com",
 ];
 
+function normalizeHashtagTag(tag: string) {
+  return tag
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[，、。,.!?！？”“"'`()\[\]{}<>/\\]/g, "")
+    .toLowerCase();
+}
+
+function extractHashtagsFromPost(params: {
+  title: string;
+  content: string;
+  category: string;
+  country: string;
+  city: string;
+  location: string;
+  placeName: string;
+  incidentType?: string;
+}) {
+  const manualMatches = `${params.title} ${params.content}`.match(/#[\p{L}\p{N}_-]+/gu) || [];
+
+  const manualTags = manualMatches.map(normalizeHashtagTag).filter(Boolean);
+
+  const autoTags = [
+    params.category,
+    params.country,
+    params.city,
+    params.location,
+    params.placeName,
+    params.incidentType || "",
+    params.category ? `${params.category}避坑` : "",
+    params.country ? `${params.country}避坑` : "",
+    params.city ? `${params.city}避坑` : "",
+  ]
+    .map((item) => normalizeHashtagTag(item || ""))
+    .filter(Boolean);
+
+  return Array.from(new Set([...manualTags, ...autoTags])).slice(0, 20);
+}
+
 export default function SeedAdminPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
@@ -47,6 +100,7 @@ export default function SeedAdminPage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("店家");
   const [country, setCountry] = useState("日本");
+  const [customCountry, setCustomCountry] = useState("");
   const [city, setCity] = useState("");
   const [location, setLocation] = useState("");
   const [placeName, setPlaceName] = useState("");
@@ -56,7 +110,6 @@ export default function SeedAdminPage() {
 
   const [incidentType, setIncidentType] = useState("");
   const [riskLevel, setRiskLevel] = useState<"低" | "中" | "高">("中");
-  const [publishedAt, setPublishedAt] = useState("");
 
   const [seedAuthorName, setSeedAuthorName] = useState(SEED_AUTHORS[0].name);
   const [seedAuthorSlug, setSeedAuthorSlug] = useState(SEED_AUTHORS[0].slug);
@@ -76,8 +129,7 @@ export default function SeedAdminPage() {
 
   const isIncident = category === "人物/事件";
 
-  // 先給你穩定可用版本：
-  // 如果你之後要重新開 admin 白名單，把 true 改回下面那行即可
+  // 如果你之後要重新開 admin 白名單，把 true 改回下面那段即可
   // const isAdmin =
   //   !!user?.email &&
   //   ADMIN_EMAILS.map((email) => email.toLowerCase()).includes(user.email.toLowerCase());
@@ -147,6 +199,32 @@ export default function SeedAdminPage() {
     return uploaded;
   }
 
+  const previewHashtags = useMemo(() => {
+    const finalCountry = country === "其他" ? customCountry.trim() : country;
+
+    return extractHashtagsFromPost({
+      title,
+      content,
+      category,
+      country: finalCountry,
+      city,
+      location,
+      placeName,
+      incidentType: isIncident ? incidentType : "",
+    });
+  }, [
+    title,
+    content,
+    category,
+    country,
+    customCountry,
+    city,
+    location,
+    placeName,
+    incidentType,
+    isIncident,
+  ]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -170,12 +248,27 @@ export default function SeedAdminPage() {
       return;
     }
 
+    if (country === "其他" && !customCountry.trim()) {
+      alert("請輸入其他國家名稱");
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const finalPublishedAt = publishedAt
-        ? new Date(publishedAt).toISOString()
-        : new Date().toISOString();
+      const finalCountry = country === "其他" ? customCountry.trim() : country;
+      const finalPublishedAt = new Date().toISOString();
+
+      const hashtags = extractHashtagsFromPost({
+        title,
+        content,
+        category,
+        country: finalCountry,
+        city,
+        location,
+        placeName,
+        incidentType: isIncident ? incidentType : "",
+      });
 
       let mediaItems: MediaItem[] = [];
 
@@ -203,13 +296,14 @@ export default function SeedAdminPage() {
           user_id: user.id,
           title,
           category,
-          country,
+          country: finalCountry,
           city: city || null,
           location,
           place_name: placeName || null,
           google_maps_url: googleMapsUrl || null,
           external_url: externalUrl || null,
           content,
+          hashtags,
           image_url: firstImage,
           video_url: firstVideo,
           media_urls: mediaItems,
@@ -243,6 +337,7 @@ export default function SeedAdminPage() {
       setTitle("");
       setCategory("店家");
       setCountry("日本");
+      setCustomCountry("");
       setCity("");
       setLocation("");
       setPlaceName("");
@@ -251,7 +346,6 @@ export default function SeedAdminPage() {
       setContent("");
       setIncidentType("");
       setRiskLevel("中");
-      setPublishedAt("");
       setSeedAuthorName(SEED_AUTHORS[0].name);
       setSeedAuthorSlug(SEED_AUTHORS[0].slug);
       setIsPersonalExperience(false);
@@ -309,7 +403,7 @@ export default function SeedAdminPage() {
             <div>
               <h1 className="text-2xl font-black">管理員後台發文</h1>
               <p className="mt-1 text-sm text-slate-500">
-                可選擇編輯角色名稱，並上傳影片與照片。前台會先顯示影片，再顯示照片。
+                跟前台用戶發文一致，支援多國家、其他國家、自動 hashtag，貼文時間自動以送出當下為準。
               </p>
             </div>
 
@@ -388,6 +482,19 @@ export default function SeedAdminPage() {
                     <option key={item}>{item}</option>
                   ))}
                 </select>
+
+                {country === "其他" && (
+                  <div className="mt-3">
+                    <label className="mb-2 block text-sm font-medium">其他國家</label>
+                    <input
+                      type="text"
+                      value={customCountry}
+                      onChange={(e) => setCustomCountry(e.target.value)}
+                      placeholder="請輸入國家名稱，例如：冰島 / 土耳其 / 秘魯"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -512,11 +619,27 @@ export default function SeedAdminPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={8}
-                placeholder="寫下你的避坑內容..."
+                placeholder="寫下你的避坑內容，可直接在內容中輸入 #東京美食 #大阪踩雷"
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                 required
               />
             </div>
+
+            {previewHashtags.length > 0 && (
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+                <div className="mb-2 text-sm font-semibold text-slate-900">預覽 hashtag</div>
+                <div className="flex flex-wrap gap-2">
+                  {previewHashtags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-700"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-[24px] border border-orange-200 bg-orange-50/70 p-4">
               <label className="flex items-center gap-3 text-sm font-semibold text-slate-900">
@@ -585,14 +708,8 @@ export default function SeedAdminPage() {
               )}
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium">發布時間（可留空）</label>
-              <input
-                type="datetime-local"
-                value={publishedAt}
-                onChange={(e) => setPublishedAt(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
-              />
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              發布時間將自動使用你按下送出的當下時間，不需手動設定。
             </div>
 
             <div>
