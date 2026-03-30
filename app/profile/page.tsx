@@ -14,12 +14,41 @@ type ProfileRow = {
   avatar_url?: string | null;
 };
 
+type MyPost = {
+  id: number;
+  title: string;
+  category: string;
+  country?: string | null;
+  city?: string | null;
+  location?: string | null;
+  place_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
 function getDisplayName(profile?: ProfileRow | null, fallbackEmail?: string | null) {
   if (profile?.display_name?.trim()) return profile.display_name.trim();
   if (profile?.username?.trim()) return profile.username.trim();
   if (profile?.email?.trim()) return profile.email.split("@")[0];
   if (fallbackEmail?.trim()) return fallbackEmail.split("@")[0];
   return "會員";
+}
+
+function formatDateTime(dateString: string | null | undefined) {
+  if (!dateString) return "未知時間";
+
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "未知時間";
+
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Australia/Brisbane",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
 }
 
 export default function ProfilePage() {
@@ -32,6 +61,10 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  const [myPosts, setMyPosts] = useState<MyPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -86,7 +119,28 @@ export default function ProfilePage() {
       setAvatarUrl(row.avatar_url || "");
     }
 
+    async function loadMyPosts() {
+      setPostsLoading(true);
+
+      const { data, error } = await supabase
+        .from("posts")
+        .select("id, title, category, country, city, location, place_name, created_at, updated_at")
+        .eq("user_id", currentUserId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("load my posts error:", error);
+        setMyPosts([]);
+        setPostsLoading(false);
+        return;
+      }
+
+      setMyPosts((data as MyPost[]) || []);
+      setPostsLoading(false);
+    }
+
     loadProfile();
+    loadMyPosts();
   }, [user, loading, router]);
 
   async function handleUploadAvatar(file: File) {
@@ -111,7 +165,6 @@ export default function ProfilePage() {
         });
 
       if (uploadError) {
-        console.error("avatar upload error:", uploadError);
         alert("頭像上傳失敗：" + uploadError.message);
         setUploading(false);
         return;
@@ -129,7 +182,6 @@ export default function ProfilePage() {
       });
 
       if (updateError) {
-        console.error("profile avatar update error:", updateError);
         alert("更新頭像失敗：" + updateError.message);
         setUploading(false);
         return;
@@ -152,7 +204,6 @@ export default function ProfilePage() {
       router.refresh();
       alert("頭像已更新");
     } catch (error: any) {
-      console.error("handleUploadAvatar unexpected error:", error);
       setUploading(false);
       alert("頭像上傳失敗：" + (error?.message || "未知錯誤"));
     }
@@ -174,7 +225,6 @@ export default function ProfilePage() {
     setSaving(false);
 
     if (error) {
-      console.error("profile save error:", error);
       alert("儲存失敗：" + error.message);
       return;
     }
@@ -201,10 +251,36 @@ export default function ProfilePage() {
     alert("會員資料已更新");
   }
 
+  async function handleDeletePost(postId: number) {
+    if (!user) return;
+
+    const confirmed = window.confirm("確定要刪除這篇貼文嗎？刪除後無法恢復。");
+    if (!confirmed) return;
+
+    setDeletingPostId(postId);
+
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", postId)
+      .eq("user_id", user.id);
+
+    setDeletingPostId(null);
+
+    if (error) {
+      alert("刪除失敗：" + error.message);
+      return;
+    }
+
+    setMyPosts((prev) => prev.filter((post) => post.id !== postId));
+    alert("貼文已刪除");
+    router.refresh();
+  }
+
   if (loading || !user) {
     return (
       <main className="min-h-screen bg-slate-100 px-4 py-8">
-        <div className="mx-auto max-w-xl rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
+        <div className="mx-auto max-w-3xl rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           載入中...
         </div>
       </main>
@@ -215,7 +291,7 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-8 text-slate-900">
-      <div className="mx-auto max-w-xl space-y-5">
+      <div className="mx-auto max-w-3xl space-y-5">
         <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-black">會員資料</h1>
@@ -296,6 +372,80 @@ export default function ProfilePage() {
               {saving ? "儲存中..." : "儲存資料"}
             </button>
           </div>
+        </section>
+
+        <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-slate-200/70">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-black">我的貼文</h2>
+            <Link
+              href="/write"
+              className="rounded-full bg-slate-900 px-4 py-2 text-sm text-white"
+            >
+              ＋ 發新貼文
+            </Link>
+          </div>
+
+          {postsLoading ? (
+            <div className="text-sm text-slate-500">載入中...</div>
+          ) : myPosts.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              你目前還沒有發過貼文。
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/post/${post.id}`}
+                        className="block text-base font-bold text-slate-900 hover:text-slate-700"
+                      >
+                        {post.place_name || post.title}
+                      </Link>
+
+                      {post.place_name && post.title && post.place_name !== post.title && (
+                        <div className="mt-1 text-sm text-slate-700">{post.title}</div>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                        <span>{post.category}</span>
+                        {post.country && <span>{post.country}</span>}
+                        {post.city && <span>{post.city}</span>}
+                        {post.location && <span>{post.location}</span>}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+                        <span>發佈：{formatDateTime(post.created_at)}</span>
+                        {post.updated_at && <span>更新：{formatDateTime(post.updated_at)}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 gap-2">
+                      <Link
+                        href={`/edit/${post.id}`}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
+                      >
+                        編輯
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePost(post.id)}
+                        disabled={deletingPostId === post.id}
+                        className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 disabled:opacity-60"
+                      >
+                        {deletingPostId === post.id ? "刪除中..." : "刪除"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </main>

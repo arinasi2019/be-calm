@@ -27,6 +27,7 @@ type Post = {
   location?: string | null;
   content: string;
   created_at: string | null;
+  updated_at?: string | null;
   image_url?: string | null;
   video_url?: string | null;
   media_urls?: MediaItem[] | null;

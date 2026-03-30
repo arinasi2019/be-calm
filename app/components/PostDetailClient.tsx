@@ -31,6 +31,7 @@ type Post = {
   location?: string | null;
   content: string;
   created_at: string | null;
+  updated_at?: string | null;
   image_url?: string | null;
   video_url?: string | null;
   media_urls?: MediaItem[] | null;
@@ -519,6 +520,9 @@ export default function PostDetailClient({ post }: { post: Post }) {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  const isOwner = Boolean(user?.id && post.user_id && user.id === post.user_id);
 
   useEffect(() => {
     async function loadSavedState() {
@@ -596,6 +600,40 @@ export default function PostDetailClient({ post }: { post: Post }) {
     setSaveLoading(false);
   }
 
+  async function handleDelete() {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    if (!isOwner) {
+      alert("你沒有刪除這篇貼文的權限");
+      return;
+    }
+
+    const confirmed = window.confirm("確定要刪除這篇貼文嗎？刪除後無法恢復。");
+    if (!confirmed) return;
+
+    setDeleting(true);
+
+    const { error } = await supabase
+      .from("posts")
+      .delete()
+      .eq("id", post.id)
+      .eq("user_id", user.id);
+
+    setDeleting(false);
+
+    if (error) {
+      alert("刪除失敗：" + error.message);
+      return;
+    }
+
+    alert("貼文已刪除");
+    router.push("/profile");
+    router.refresh();
+  }
+
   function openLightbox(mediaList: MediaItem[], index: number) {
     if (!mediaList.length) return;
     setLightboxMedia(mediaList);
@@ -619,7 +657,7 @@ export default function PostDetailClient({ post }: { post: Post }) {
     <>
       <main className="min-h-screen bg-slate-100 text-slate-900">
         <div className="mx-auto max-w-3xl px-4 py-6">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <Link
               href="/"
               className="inline-flex rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
@@ -627,18 +665,40 @@ export default function PostDetailClient({ post }: { post: Post }) {
               ← 回首頁
             </Link>
 
-            <button
-              type="button"
-              onClick={toggleSave}
-              disabled={saveLoading}
-              className={`rounded-full px-4 py-2 text-sm font-medium ring-1 ${
-                isSaved
-                  ? "bg-amber-100 text-amber-700 ring-amber-200"
-                  : "bg-white text-slate-700 ring-slate-200"
-              } disabled:opacity-60`}
-            >
-              {isSaved ? "已收藏" : "收藏"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {isOwner && (
+                <>
+                  <Link
+                    href={`/edit/${post.id}`}
+                    className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                  >
+                    編輯
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="rounded-full bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 ring-1 ring-rose-200 disabled:opacity-60"
+                  >
+                    {deleting ? "刪除中..." : "刪除"}
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={toggleSave}
+                disabled={saveLoading}
+                className={`rounded-full px-4 py-2 text-sm font-medium ring-1 ${
+                  isSaved
+                    ? "bg-amber-100 text-amber-700 ring-amber-200"
+                    : "bg-white text-slate-700 ring-slate-200"
+                } disabled:opacity-60`}
+              >
+                {isSaved ? "已收藏" : "收藏"}
+              </button>
+            </div>
           </div>
 
           <article
@@ -706,8 +766,12 @@ export default function PostDetailClient({ post }: { post: Post }) {
               {post.title}
             </h1>
 
-            <div className="mt-3 text-sm text-slate-500">
-              作者：{authorName} ・ {formatDateTime(post.published_at || post.created_at)}
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
+              <span>作者：{authorName}</span>
+              <span>發佈：{formatDateTime(post.published_at || post.created_at)}</span>
+              {post.updated_at && (
+                <span>最後更新：{formatDateTime(post.updated_at)}</span>
+              )}
             </div>
 
             {displayPlace && (
