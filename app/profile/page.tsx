@@ -364,19 +364,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium">Email</label>
-              <input
-                type="text"
-                value={user.email || ""}
-                disabled
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-500 outline-none"
-              />
-              <p className="mt-2 text-xs text-slate-400">
-                目前這裡先顯示登入 email，如要支援修改登入 email，需要另外串接帳號設定流程。
-              </p>
-            </div>
-
             <button
               onClick={handleSave}
               disabled={saving}
