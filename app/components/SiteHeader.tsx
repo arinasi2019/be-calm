@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogOut, PenSquare, User } from "lucide-react";
+import { ChevronDown, FileText, LogOut, PenSquare, User } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthProvider";
 
@@ -169,7 +169,7 @@ export default function SiteHeader() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-14 z-50 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+                <div className="absolute right-0 top-14 z-50 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
                   <div className="border-b border-slate-100 px-4 py-3">
                     <div className="truncate text-sm font-bold text-slate-900">
                       {displayName}
@@ -182,16 +182,25 @@ export default function SiteHeader() {
                   <Link
                     href="/profile"
                     onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
                   >
                     <User className="h-4 w-4" />
                     我的個人頁
                   </Link>
 
                   <Link
+                    href="/profile#my-posts"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
+                  >
+                    <FileText className="h-4 w-4" />
+                    我的貼文
+                  </Link>
+
+                  <Link
                     href="/write"
                     onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 transition hover:bg-slate-50"
                   >
                     <PenSquare className="h-4 w-4" />
                     發表貼文
@@ -200,7 +209,7 @@ export default function SiteHeader() {
                   <button
                     type="button"
                     onClick={handleSignOut}
-                    className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-rose-600 transition hover:bg-rose-50"
                   >
                     <LogOut className="h-4 w-4" />
                     登出
