@@ -40,7 +40,7 @@ type MediaItem = {
 };
 
 function normalizeHashtagTag(tag: string) {
-  return tag
+  return String(tag || "")
     .replace(/^#+/, "")
     .trim()
     .replace(/\s+/g, "")
@@ -48,7 +48,12 @@ function normalizeHashtagTag(tag: string) {
     .toLowerCase();
 }
 
-function extractHashtagsFromPost(params: {
+function extractManualHashtags(text: string) {
+  const matches = text.match(/#[\p{L}\p{N}_-]+/gu) || [];
+  return matches.map(normalizeHashtagTag).filter(Boolean);
+}
+
+function buildHashtags(params: {
   title: string;
   content: string;
   category: string;
@@ -58,9 +63,7 @@ function extractHashtagsFromPost(params: {
   placeName: string;
   incidentType?: string;
 }) {
-  const manualMatches = `${params.title} ${params.content}`.match(/#[\p{L}\p{N}_-]+/gu) || [];
-
-  const manualTags = manualMatches.map(normalizeHashtagTag).filter(Boolean);
+  const manualTags = extractManualHashtags(`${params.title} ${params.content}`);
 
   const autoTags = [
     params.category,
@@ -73,7 +76,7 @@ function extractHashtagsFromPost(params: {
     params.country ? `${params.country}避坑` : "",
     params.city ? `${params.city}避坑` : "",
   ]
-    .map((item) => normalizeHashtagTag(item || ""))
+    .map(normalizeHashtagTag)
     .filter(Boolean);
 
   return Array.from(new Set([...manualTags, ...autoTags])).slice(0, 20);
@@ -165,7 +168,7 @@ export default function WritePage() {
   const previewHashtags = useMemo(() => {
     const finalCountry = country === "其他" ? customCountry.trim() : country;
 
-    return extractHashtagsFromPost({
+    return buildHashtags({
       title,
       content,
       category,
@@ -193,6 +196,16 @@ export default function WritePage() {
 
     if (!user) {
       router.push("/login");
+      return;
+    }
+
+    if (!title.trim()) {
+      alert("請先填寫標題");
+      return;
+    }
+
+    if (!content.trim()) {
+      alert("請先填寫內容");
       return;
     }
 
@@ -228,7 +241,7 @@ export default function WritePage() {
     try {
       const finalCountry = country === "其他" ? customCountry.trim() : country;
 
-      const hashtags = extractHashtagsFromPost({
+      const hashtags = buildHashtags({
         title,
         content,
         category,
@@ -241,14 +254,15 @@ export default function WritePage() {
 
       let mediaItems: MediaItem[] = [];
 
-      if (imageFiles.length > 0) {
-        const uploadedImages = await uploadMultipleFiles(imageFiles, "images", "image");
-        mediaItems = [...mediaItems, ...uploadedImages];
-      }
-
+      // 固定先影片後圖片，和前台顯示邏輯更一致
       if (videoFiles.length > 0) {
         const uploadedVideos = await uploadMultipleFiles(videoFiles, "videos", "video");
         mediaItems = [...mediaItems, ...uploadedVideos];
+      }
+
+      if (imageFiles.length > 0) {
+        const uploadedImages = await uploadMultipleFiles(imageFiles, "images", "image");
+        mediaItems = [...mediaItems, ...uploadedImages];
       }
 
       const firstVideo = mediaItems.find((item) => item.type === "video")?.url || null;
@@ -259,32 +273,32 @@ export default function WritePage() {
         .map((item) => item.trim())
         .filter(Boolean);
 
-      const { error } = await supabase.from("posts").insert([
-        {
-          user_id: user.id,
-          title,
-          category,
-          country: finalCountry,
-          city: city || null,
-          location,
-          place_name: placeName || null,
-          google_maps_url: googleMapsUrl || null,
-          external_url: externalUrl || null,
-          content,
-          hashtags,
-          image_url: firstImage,
-          video_url: firstVideo,
-          media_urls: mediaItems,
-          incident_type: isIncident ? incidentType : null,
-          risk_level: isIncident ? riskLevel : null,
-          content_type: isIncident ? "incident" : "normal",
-          can_try: canTry,
-          booking_url: canTry ? bookingUrl || null : null,
-          price_from: canTry && priceFrom ? Number(priceFrom) : null,
-          try_button_label: canTry ? tryButtonLabel || "親自踩坑" : null,
-          pitfall_summary: canTry ? (pitfallSummary.length ? pitfallSummary : null) : null,
-        },
-      ]);
+      const payload = {
+        user_id: user.id,
+        title: title.trim(),
+        category,
+        country: finalCountry,
+        city: city.trim() || null,
+        location: location.trim(),
+        place_name: placeName.trim() || null,
+        google_maps_url: googleMapsUrl.trim() || null,
+        external_url: externalUrl.trim() || null,
+        content: content.trim(),
+        hashtags,
+        image_url: firstImage,
+        video_url: firstVideo,
+        media_urls: mediaItems,
+        incident_type: isIncident ? incidentType : null,
+        risk_level: isIncident ? riskLevel : null,
+        content_type: isIncident ? "incident" : "normal",
+        can_try: canTry,
+        booking_url: canTry ? bookingUrl.trim() || null : null,
+        price_from: canTry && priceFrom ? Number(priceFrom) : null,
+        try_button_label: canTry ? tryButtonLabel.trim() || "親自踩坑" : null,
+        pitfall_summary: canTry ? (pitfallSummary.length ? pitfallSummary : null) : null,
+      };
+
+      const { error } = await supabase.from("posts").insert([payload]);
 
       if (error) {
         alert("發文失敗：" + error.message);
@@ -293,6 +307,7 @@ export default function WritePage() {
       }
 
       setSubmitted(true);
+
       setTitle("");
       setCategory("店家");
       setCountry("日本");
@@ -320,7 +335,7 @@ export default function WritePage() {
       }, 1000);
     } catch (error: any) {
       setLoadingSubmit(false);
-      alert("上傳失敗：" + error.message);
+      alert("上傳失敗：" + (error?.message || "未知錯誤"));
     }
   }
 
