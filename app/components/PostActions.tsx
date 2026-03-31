@@ -514,7 +514,7 @@ export default function PostActions({ postId }: { postId: number }) {
       .select("id, email, username, display_name, avatar_url")
       .in("id", userIds);
 
-    if (error) {
+      if (error) {
       console.error("載入 profiles 失敗：", error.message);
       return;
     }
@@ -640,45 +640,78 @@ export default function PostActions({ postId }: { postId: number }) {
     if (loadingPit) return;
     setLoadingPit(true);
 
-    if (!hasPitted) {
-      setPitCount((prev) => prev + 1);
-      setHasPitted(true);
-
-      const { data, error } = await supabase
+    try {
+      // 每次都先查 DB，避免前端 state 跟資料庫不同步時重複 insert
+      const { data: existingVote, error: findError } = await supabase
         .from("votes")
-        .insert([{ post_id: postId, user_id: user.id }])
-        .select("id")
-        .single();
+        .select("id, post_id, user_id")
+        .eq("post_id", postId)
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-      if (error) {
-        setPitCount((prev) => Math.max(0, prev - 1));
-        setHasPitted(false);
-        alert("按坑失敗：" + error.message);
+      if (findError) {
+        alert("按坑失敗：" + findError.message);
         setLoadingPit(false);
         return;
       }
 
-      setUserVoteId(data?.id ?? null);
-      setLoadingPit(false);
-      return;
-    }
+      // 已經按過 -> 取消
+      if (existingVote?.id) {
+        const previousPitCount = pitCount;
+        setHasPitted(false);
+        setUserVoteId(null);
+        setPitCount((prev) => Math.max(0, prev - 1));
 
-    setPitCount((prev) => Math.max(0, prev - 1));
-    setHasPitted(false);
+        const { error: deleteError } = await supabase
+          .from("votes")
+          .delete()
+          .eq("id", existingVote.id)
+          .eq("user_id", user.id);
 
-    const { error } = userVoteId
-      ? await supabase.from("votes").delete().eq("id", userVoteId).eq("user_id", user.id)
-      : await supabase.from("votes").delete().eq("post_id", postId).eq("user_id", user.id);
+        if (deleteError) {
+          setHasPitted(true);
+          setUserVoteId(existingVote.id);
+          setPitCount(previousPitCount);
+          alert("取消坑失敗：" + deleteError.message);
+          setLoadingPit(false);
+          return;
+        }
 
-    if (error) {
-      setPitCount((prev) => prev + 1);
+        setLoadingPit(false);
+        return;
+      }
+
+      // 尚未按過 -> 新增
+      const previousPitCount = pitCount;
       setHasPitted(true);
-      alert("取消坑失敗：" + error.message);
-      setLoadingPit(false);
-      return;
+      setPitCount((prev) => prev + 1);
+
+      const { data: insertedVote, error: insertError } = await supabase
+        .from("votes")
+        .insert([{ post_id: postId, user_id: user.id }])
+        .select("id, post_id, user_id")
+        .single();
+
+      if (insertError) {
+        // 如果撞到 unique，代表其實 DB 已有資料，直接重載 vote 狀態
+        if (insertError.message?.includes("votes_post_id_user_id_key")) {
+          await loadVotes();
+          setLoadingPit(false);
+          return;
+        }
+
+        setHasPitted(false);
+        setPitCount(previousPitCount);
+        alert("按坑失敗：" + insertError.message);
+        setLoadingPit(false);
+        return;
+      }
+
+      setUserVoteId(insertedVote?.id ?? null);
+    } catch (error: any) {
+      alert("按坑失敗：" + (error?.message || "未知錯誤"));
     }
 
-    setUserVoteId(null);
     setLoadingPit(false);
   }
 
