@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import PostFeed from "../../components/PostFeed";
 import { supabase } from "../../lib/supabase";
 
@@ -54,19 +55,33 @@ type Post = {
   pitfall_summary?: string[] | null;
 };
 
-export default function TagPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+function normalizeTag(tag: string) {
+  return tag.replace(/^#+/, "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+export default function TagPage() {
+  const params = useParams<{ slug: string }>();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const decodedTag = decodeURIComponent(params.slug).toLowerCase();
+  const decodedTag = useMemo(() => {
+    const raw = params?.slug ? decodeURIComponent(params.slug) : "";
+    return normalizeTag(raw);
+  }, [params?.slug]);
+
+  const displayTag = decodedTag || "tag";
 
   useEffect(() => {
     async function load() {
+      if (!decodedTag) {
+        setPosts([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
+
+      let rawPosts: Post[] = [];
 
       const { data: postsData, error } = await supabase
         .from("posts")
@@ -74,14 +89,22 @@ export default function TagPage({
         .contains("hashtags", [decodedTag])
         .order("id", { ascending: false });
 
-      if (error) {
-        console.error("載入 tag 貼文失敗：", error.message);
-        setPosts([]);
-        setLoading(false);
-        return;
+      if (!error && postsData) {
+        rawPosts = (postsData as Post[]) || [];
       }
 
-      const rawPosts = (postsData as Post[]) || [];
+      if (rawPosts.length === 0) {
+        const fallbackRes = await supabase
+          .from("posts")
+          .select("*")
+          .ilike("content", `%#${decodedTag}%`)
+          .order("id", { ascending: false });
+
+        if (!fallbackRes.error && fallbackRes.data) {
+          rawPosts = (fallbackRes.data as Post[]) || [];
+        }
+      }
+
       const userIds = Array.from(
         new Set(rawPosts.map((post) => post.user_id).filter(Boolean) as string[])
       );
@@ -124,10 +147,8 @@ export default function TagPage({
             ← 回首頁
           </Link>
 
-          <h1 className="mt-4 text-3xl font-black">#{decodedTag}</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            與這個 hashtag 相關的避坑內容
-          </p>
+          <h1 className="mt-4 text-3xl font-black">#{displayTag}</h1>
+          <p className="mt-2 text-sm text-slate-500">與這個 hashtag 相關的避坑內容</p>
         </div>
 
         {loading ? (

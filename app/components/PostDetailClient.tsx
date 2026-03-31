@@ -53,6 +53,20 @@ type Post = {
   commentCount?: number;
 };
 
+function normalizeTag(tag: string) {
+  return tag
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function extractHashtagsFromContent(content: string) {
+  if (!content) return [];
+  const matches = content.match(/#[\p{L}\p{N}_-]+/gu) || [];
+  return Array.from(new Set(matches.map(normalizeTag).filter(Boolean)));
+}
+
 function formatDateTime(dateString: string | null) {
   if (!dateString) return "未知時間";
 
@@ -174,8 +188,15 @@ function getPitfallSummary(post: Post) {
 }
 
 function getDisplayHashtags(post: Post) {
-  if (!Array.isArray(post.hashtags)) return [];
-  return post.hashtags.filter(Boolean).slice(0, 10);
+  const dbTags = Array.isArray(post.hashtags)
+    ? post.hashtags.map((tag) => String(tag || "")).map(normalizeTag).filter(Boolean)
+    : [];
+
+  if (dbTags.length > 0) {
+    return Array.from(new Set(dbTags)).slice(0, 10);
+  }
+
+  return extractHashtagsFromContent(post.content).slice(0, 10);
 }
 
 function ShareButtons({ post }: { post: Post }) {

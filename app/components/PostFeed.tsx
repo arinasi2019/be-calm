@@ -58,6 +58,20 @@ type Post = {
 
 type TabType = "home" | "search" | "saved";
 
+function normalizeTag(tag: string) {
+  return tag
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function extractHashtagsFromContent(content: string) {
+  if (!content) return [];
+  const matches = content.match(/#[\p{L}\p{N}_-]+/gu) || [];
+  return Array.from(new Set(matches.map(normalizeTag).filter(Boolean)));
+}
+
 function formatDateTime(dateString: string | null) {
   if (!dateString) return "未知時間";
 
@@ -192,8 +206,15 @@ function getPitfallSummary(post: Post) {
 }
 
 function getDisplayHashtags(post: Post) {
-  if (!Array.isArray(post.hashtags)) return [];
-  return post.hashtags.filter(Boolean).slice(0, 6);
+  const dbTags = Array.isArray(post.hashtags)
+    ? post.hashtags.map((tag) => String(tag || "")).map(normalizeTag).filter(Boolean)
+    : [];
+
+  if (dbTags.length > 0) {
+    return Array.from(new Set(dbTags)).slice(0, 6);
+  }
+
+  return extractHashtagsFromContent(post.content).slice(0, 6);
 }
 
 function MediaRail({
@@ -694,6 +715,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
     return posts.filter((post) => {
       const authorName = getAuthorName(post).toLowerCase();
       const searchName = (post.place_name || "").toLowerCase();
+      const tags = getDisplayHashtags(post);
 
       return (
         searchName.includes(q) ||
@@ -705,7 +727,7 @@ export default function PostFeed({ posts }: { posts: Post[] }) {
         (post.city || "").toLowerCase().includes(q) ||
         (post.incident_type || "").toLowerCase().includes(q) ||
         authorName.includes(q) ||
-        (post.hashtags || []).some((tag) => tag.toLowerCase().includes(q))
+        tags.some((tag) => tag.toLowerCase().includes(q))
       );
     });
   }, [posts, query]);
