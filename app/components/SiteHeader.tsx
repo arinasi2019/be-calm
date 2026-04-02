@@ -119,17 +119,17 @@ export default function SiteHeader() {
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
             <img
               src="/becalm-main-logo.png"
-              alt="避坑 BeCalm"
+              alt="BeCalm Travel"
               className="h-full w-full object-contain p-1"
             />
           </div>
 
           <div className="min-w-0">
             <div className="truncate text-2xl font-black text-[#0b1736] sm:text-3xl">
-              避坑 BeCalm
+              BeCalm Travel
             </div>
             <div className="truncate text-sm text-slate-500 sm:text-base">
-              不種草，只避雷
+              先避坑，再出發
             </div>
           </div>
         </Link>
@@ -140,7 +140,7 @@ export default function SiteHeader() {
             className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-4 py-2 text-sm font-bold text-white sm:inline-flex"
           >
             <PenSquare className="h-4 w-4" />
-            發文
+            分享旅遊避坑
           </Link>
 
           {!loading && user ? (
