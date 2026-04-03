@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -128,16 +129,22 @@ function buildFallbackResult(params: {
 }
 
 export async function POST(req: Request) {
+  let destination = "";
+  let days = "";
+  let spots: string[] = [];
+  let companion = "";
+  let style = "";
+
   try {
     const body = (await req.json()) as RequestBody;
 
-    const destination = cleanString(body.destination);
-    const days = cleanString(body.days);
-    const spots = Array.isArray(body.spots)
+    destination = cleanString(body.destination);
+    days = cleanString(body.days);
+    spots = Array.isArray(body.spots)
       ? body.spots.map((s) => cleanString(s)).filter(Boolean)
       : [];
-    const companion = cleanString(body.companion);
-    const style = cleanString(body.style);
+    companion = cleanString(body.companion);
+    style = cleanString(body.style);
 
     if (!destination) {
       return NextResponse.json(
@@ -147,7 +154,6 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
-
     if (!apiKey) {
       console.error("Missing OPENAI_API_KEY in environment variables");
       return NextResponse.json(
@@ -158,12 +164,18 @@ export async function POST(req: Request) {
 
     const client = new OpenAI({ apiKey });
 
-    const prompt = `
+    const systemPrompt = `
 你是一位專業旅遊規劃顧問，專門做三件事：
 1. 幫旅客找出行程中的踩坑風險
 2. 優化成更合理的旅遊安排
 3. 提出可直接預約的商品方向
 
+你只能輸出 JSON。
+你只能使用繁體中文。
+不要輸出 markdown，不要輸出多餘說明。
+`;
+
+    const userPrompt = `
 請根據以下資訊回答：
 
 目的地：${destination}
@@ -172,8 +184,7 @@ export async function POST(req: Request) {
 同行類型：${companion || "未指定"}
 偏好節奏：${style || "未指定"}
 
-請只回傳 JSON，不要加任何額外說明，不要使用 markdown code block。
-格式必須完全如下：
+請輸出格式如下：
 
 {
   "summary": "用 2 到 3 句繁體中文總結這趟行程的主要風險與建議",
@@ -189,24 +200,38 @@ export async function POST(req: Request) {
 }
 
 要求：
-- 一律用繁體中文
 - 要具體，不要空泛
 - 避坑提醒要像真正懂旅遊的人會說的
 - 如果使用者沒有提供景點，就依目的地與天數主動提出合理建議
 `;
 
-    const response = await client.responses.create({
+    const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      input: prompt,
+      temperature: 0.7,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    const text = response.output_text?.trim() || "";
+    const text = completion.choices?.[0]?.message?.content?.trim() || "";
+
+    if (!text) {
+      console.error("OpenAI returned empty content");
+      return NextResponse.json(
+        buildFallbackResult({ destination, days, spots, companion, style }),
+        { status: 200 }
+      );
+    }
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonText = jsonMatch ? jsonMatch[0] : text;
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(jsonText);
     } catch {
-      console.error("OpenAI returned non-JSON text:", text);
+      console.error("OpenAI returned invalid JSON text:", text);
       return NextResponse.json(
         buildFallbackResult({ destination, days, spots, companion, style }),
         { status: 200 }
@@ -215,21 +240,20 @@ export async function POST(req: Request) {
 
     const normalized = normalizeAIResult(parsed);
     if (!normalized) {
+      console.error("normalizeAIResult failed:", parsed);
       return NextResponse.json(
         buildFallbackResult({ destination, days, spots, companion, style }),
         { status: 200 }
       );
     }
 
-    return NextResponse.json(normalized);
+    return NextResponse.json(normalized, { status: 200 });
   } catch (error) {
-    console.error("API /api/pit error:", error);
+    console.error("API /api/pit fatal error:", error);
 
     return NextResponse.json(
-      {
-        error: "AI planning failed",
-      },
-      { status: 500 }
+      buildFallbackResult({ destination, days, spots, companion, style }),
+      { status: 200 }
     );
   }
 }
