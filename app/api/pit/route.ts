@@ -1,9 +1,7 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 type RequestBody = {
   destination?: string;
@@ -148,13 +146,17 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
       console.error("Missing OPENAI_API_KEY in environment variables");
       return NextResponse.json(
         buildFallbackResult({ destination, days, spots, companion, style }),
         { status: 200 }
       );
     }
+
+    const client = new OpenAI({ apiKey });
 
     const prompt = `
 你是一位專業旅遊規劃顧問，專門做三件事：
@@ -221,7 +223,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(normalized);
   } catch (error) {
-    console.error("API /api/plan error:", error);
+    console.error("API /api/pit error:", error);
 
     return NextResponse.json(
       {
