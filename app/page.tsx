@@ -48,7 +48,9 @@ type PlannerResult = {
   warnings: string[];
   optimizedPlan: string[];
   bookingSuggestions: string[];
+  dailyPlan: string[];
   summary?: string;
+  content?: string;
 };
 
 type BookingCard = {
@@ -72,13 +74,7 @@ function parseSpots(input: string) {
 }
 
 function uniqueStrings(items: string[]) {
-  return Array.from(
-    new Set(
-      items
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  );
+  return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
 }
 
 function safeArray(input: unknown) {
@@ -96,16 +92,23 @@ function normalizeAIResult(input: unknown): PlannerResult | null {
   const warnings = safeArray(obj.warnings);
   const optimizedPlan = safeArray(obj.optimizedPlan);
   const bookingSuggestions = safeArray(obj.bookingSuggestions);
+  const dailyPlan = safeArray(obj.dailyPlan);
   const summary =
     typeof obj.summary === "string" && obj.summary.trim()
       ? obj.summary.trim()
+      : undefined;
+  const content =
+    typeof obj.content === "string" && obj.content.trim()
+      ? obj.content.trim()
       : undefined;
 
   if (
     warnings.length === 0 &&
     optimizedPlan.length === 0 &&
     bookingSuggestions.length === 0 &&
-    !summary
+    dailyPlan.length === 0 &&
+    !summary &&
+    !content
   ) {
     return null;
   }
@@ -114,7 +117,9 @@ function normalizeAIResult(input: unknown): PlannerResult | null {
     warnings,
     optimizedPlan,
     bookingSuggestions,
+    dailyPlan,
     summary,
+    content,
   };
 }
 
@@ -128,6 +133,7 @@ function buildPlannerFallbackResult(params: {
   const warnings: string[] = [];
   const optimizedPlan: string[] = [];
   const bookingSuggestions: string[] = [];
+  const dailyPlan: string[] = [];
 
   const dayCount = Number(params.days || 0);
   const spotCount = params.spots.length;
@@ -138,7 +144,9 @@ function buildPlannerFallbackResult(params: {
       warnings: [],
       optimizedPlan: [],
       bookingSuggestions: [],
+      dailyPlan: [],
       summary: "",
+      content: "",
     };
   }
 
@@ -197,13 +205,30 @@ function buildPlannerFallbackResult(params: {
     bookingSuggestions.push("親子友善體驗或快速入場產品");
   }
 
-  const summary = `${destination} 這趟行程目前可以成行，但建議先處理動線、停留時間與是否需要提前預約。`;
+  const safeDayCount = Math.max(1, Math.min(dayCount || 3, 5));
+  for (let i = 1; i <= safeDayCount; i++) {
+    dailyPlan.push(`Day ${i}：安排 1–2 個核心景點，避免跨區來回，下午保留用餐與休息緩衝。`);
+  }
+
+  const content = [
+    `這趟 ${destination} 行程不是不能玩，而是目前比較像「想去清單」，還不像真正能舒服執行的旅行版本。`,
+    `我會建議你先把節奏放慢，把最想去的點留下，把只是順便的點刪掉，整體體驗會好很多。`,
+    "",
+    "你現在最該注意的是：",
+    "• 不要一天塞太多主景點",
+    "• 同區域景點放同一天",
+    "• 熱門景點與移動時間要留緩衝",
+    "",
+    "如果你要走比較有感覺的版本，這趟行程最好至少有一餐、一次散步、一次完全不趕時間的空檔。",
+  ].join("\n");
 
   return {
     warnings: uniqueStrings(warnings),
     optimizedPlan: uniqueStrings(optimizedPlan),
     bookingSuggestions: uniqueStrings(bookingSuggestions),
-    summary,
+    dailyPlan: uniqueStrings(dailyPlan),
+    summary: `${destination} 這趟行程目前可以成行，但建議先處理動線、停留時間與是否需要提前預約。`,
+    content,
   };
 }
 
@@ -395,7 +420,7 @@ function SummaryCard({
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-lg font-black text-slate-900">{title}</div>
-      <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-700">
+      <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-700 whitespace-pre-wrap">
         {body}
       </div>
     </div>
@@ -413,7 +438,7 @@ function ResultListCard({
   title: string;
   subtitle: string;
   items: string[];
-  tone?: "amber" | "sky" | "rose";
+  tone?: "amber" | "sky" | "rose" | "emerald";
   numbered?: boolean;
   emptyText: string;
 }) {
@@ -422,6 +447,8 @@ function ResultListCard({
       ? "border-sky-200 bg-sky-50 text-sky-900"
       : tone === "rose"
       ? "border-rose-200 bg-rose-50 text-rose-900"
+      : tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
       : "border-amber-200 bg-amber-50 text-amber-900";
 
   return (
@@ -438,7 +465,7 @@ function ResultListCard({
           {items.map((item, index) => (
             <div
               key={`${item}-${index}`}
-              className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${toneClass}`}
+              className={`rounded-2xl border px-4 py-4 text-sm leading-7 ${toneClass}`}
             >
               {numbered ? `${index + 1}. ${item}` : item}
             </div>
@@ -486,6 +513,21 @@ function BookingCardView({ card }: { card: BookingCard }) {
           {card.buttonLabel}
         </Link>
       )}
+    </div>
+  );
+}
+
+function LongformAdviceCard({ content }: { content: string }) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-lg font-black text-slate-900">AI 顧問版完整建議</div>
+      <div className="mt-1 text-sm text-slate-500">
+        這裡會像真人旅遊顧問一樣，把節奏、取捨與體驗感講清楚。
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-8 text-slate-700 whitespace-pre-wrap">
+        {content}
+      </div>
     </div>
   );
 }
@@ -842,6 +884,28 @@ export default function HomePage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="mt-6">
+          <ResultListCard
+            title="AI 每日行程建議"
+            subtitle="這裡不是空泛提醒，而是可直接照著走的 Day by Day 版本。"
+            items={hasPlanned ? effectivePlanner.dailyPlan || [] : []}
+            tone="emerald"
+            numbered={false}
+            emptyText="完成診斷後，這裡會出現 AI 幫你重新整理過的每日行程。"
+          />
+        </section>
+
+        <section className="mt-6">
+          <LongformAdviceCard
+            content={
+              !hasPlanned
+                ? "等你輸入目的地、天數與偏好後，這裡會出現更像真人旅遊顧問的完整規劃建議。"
+                : effectivePlanner.content ||
+                  "目前還沒有更完整的顧問版建議內容。"
+            }
+          />
         </section>
 
         <section className="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
