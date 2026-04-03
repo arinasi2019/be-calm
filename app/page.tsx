@@ -5,39 +5,9 @@ import Link from "next/link";
 import SiteHeader from "./components/SiteHeader";
 import { supabase } from "./lib/supabase";
 
-type MediaItem = {
-  type: "image" | "video";
-  url: string;
-};
-
-type RiskLevel = "低" | "中" | "高";
-
-type Profile = {
-  id: string;
-  email?: string | null;
-  username?: string | null;
-  display_name?: string | null;
-};
-
-type Post = {
-  id: number;
-  user_id?: string | null;
-  title: string;
-  category: string;
-  country?: string | null;
-  city?: string | null;
-  location?: string | null;
-  content: string;
-  created_at: string | null;
-  image_url?: string | null;
-  video_url?: string | null;
-  place_name?: string | null;
-  media_urls?: MediaItem[] | null;
-  author_profile?: Profile | null;
-  hashtags?: string[] | null;
-};
-
 type CompanionType = "一個人" | "情侶" | "朋友" | "家庭親子" | "長輩同行";
+
+type Post = any;
 
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -66,10 +36,12 @@ export default function HomePage() {
       const { data } = await supabase
         .from("posts")
         .select("*")
+        .eq("category", "旅遊")
         .order("id", { ascending: false });
 
       setPosts(data || []);
     }
+
     loadPosts();
   }, []);
 
@@ -107,84 +79,127 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-screen bg-[#f5f7fb] pb-16 text-slate-900">
+      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
         <SiteHeader />
 
-        {/* AI FORM */}
-        <div className="rounded-[28px] bg-white p-6 shadow">
-          <h2 className="text-xl font-black">AI 行程診斷</h2>
+        {/* HERO + AI */}
+        <section className="rounded-[34px] bg-gradient-to-br from-black to-slate-800 p-6 text-white">
+          <h1 className="text-3xl font-black">
+            AI 幫你避坑，直接優化旅遊行程
+          </h1>
 
-          <input
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            placeholder="你要去哪裡"
-            className="mt-4 w-full rounded-xl border p-3"
-          />
+          <div className="mt-6 space-y-3">
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="去哪裡"
+              className="w-full rounded-xl p-3 text-black"
+            />
 
-          <input
-            type="number"
-            value={days}
-            onChange={(e) => setDays(e.target.value)}
-            className="mt-3 w-full rounded-xl border p-3"
-          />
+            <input
+              type="number"
+              value={days}
+              onChange={(e) => setDays(e.target.value)}
+              className="w-full rounded-xl p-3 text-black"
+            />
 
-          <textarea
-            value={spotsInput}
-            onChange={(e) => setSpotsInput(e.target.value)}
-            placeholder="想去的地方"
-            className="mt-3 w-full rounded-xl border p-3"
-          />
+            <textarea
+              value={spotsInput}
+              onChange={(e) => setSpotsInput(e.target.value)}
+              placeholder="想去的景點"
+              className="w-full rounded-xl p-3 text-black"
+            />
 
-          <button
-            onClick={handlePlanNow}
-            className="mt-4 w-full rounded-full bg-black py-3 text-white"
-          >
-            開始診斷我的行程
-          </button>
-        </div>
+            <button
+              onClick={handlePlanNow}
+              className="w-full rounded-full bg-white py-3 font-bold text-black"
+            >
+              開始 AI 診斷
+            </button>
+          </div>
+        </section>
 
         {/* AI RESULT */}
         {hasPlanned && (
-          <div className="mt-6 space-y-6">
-            {/* 避坑 */}
-            <div className="rounded-2xl bg-white p-5 shadow">
-              <h3 className="font-bold">AI 避坑提醒</h3>
+          <section className="mt-6 space-y-6">
+            {loadingAI && (
+              <div className="rounded-2xl bg-white p-6 text-center shadow">
+                AI 分析中...
+              </div>
+            )}
 
-              {loadingAI ? (
-                <div className="mt-3 text-sm">AI 分析中...</div>
-              ) : (
-                aiResult?.warnings?.map((w: string, i: number) => (
-                  <div key={i} className="mt-2 text-sm text-red-600">
-                    ⚠ {w}
+            {!loadingAI && aiResult && (
+              <>
+                {/* 避坑 */}
+                <div className="rounded-2xl bg-white p-6 shadow">
+                  <h2 className="text-xl font-black">⚠ 避坑提醒</h2>
+
+                  {aiResult.warnings.map((w: string, i: number) => (
+                    <div key={i} className="mt-2 text-red-600">
+                      {w}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 行程 */}
+                <div className="rounded-2xl bg-white p-6 shadow">
+                  <h2 className="text-xl font-black">✨ 優化行程</h2>
+
+                  {aiResult.optimizedPlan.map((p: string, i: number) => (
+                    <div key={i} className="mt-2">
+                      {i + 1}. {p}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 商品 */}
+                <div className="rounded-2xl bg-white p-6 shadow">
+                  <h2 className="text-xl font-black">🔥 推薦預約</h2>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {aiResult.bookingSuggestions.map(
+                      (b: string, i: number) => (
+                        <div key={i} className="border p-4 rounded-xl">
+                          <div className="font-bold">{b}</div>
+
+                          <button
+                            className="mt-3 w-full rounded-full bg-black py-2 text-white"
+                            onClick={() => {
+                              alert("這裡接你的包車 / Klook");
+                            }}
+                          >
+                            立即預約
+                          </button>
+                        </div>
+                      )
+                    )}
                   </div>
-                ))
-              )}
-            </div>
-
-            {/* 行程 */}
-            <div className="rounded-2xl bg-white p-5 shadow">
-              <h3 className="font-bold">優化行程</h3>
-
-              {aiResult?.optimizedPlan?.map((p: string, i: number) => (
-                <div key={i} className="mt-2 text-sm">
-                  {i + 1}. {p}
                 </div>
-              ))}
-            </div>
-
-            {/* 預約 */}
-            <div className="rounded-2xl bg-white p-5 shadow">
-              <h3 className="font-bold">預約建議</h3>
-
-              {aiResult?.bookingSuggestions?.map((b: string, i: number) => (
-                <div key={i} className="mt-2 text-sm text-green-700">
-                  {b}
-                </div>
-              ))}
-            </div>
-          </div>
+              </>
+            )}
+          </section>
         )}
+
+        {/* FEED */}
+        <section className="mt-8">
+          <h2 className="text-xl font-black">旅遊避坑分享</h2>
+
+          <div className="mt-4 grid gap-4">
+            {posts.map((p) => (
+              <Link
+                key={p.id}
+                href={`/post/${p.id}`}
+                className="block rounded-xl bg-white p-4 shadow"
+              >
+                <div className="font-bold">{p.title}</div>
+                <div className="text-sm text-slate-500 mt-1">
+                  {p.content}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );
