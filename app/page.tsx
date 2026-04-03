@@ -436,7 +436,10 @@ function ResultListCard({
       ) : (
         <div className="mt-4 space-y-3">
           {items.map((item, index) => (
-            <div key={`${item}-${index}`} className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${toneClass}`}>
+            <div
+              key={`${item}-${index}`}
+              className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${toneClass}`}
+            >
               {numbered ? `${index + 1}. ${item}` : item}
             </div>
           ))}
@@ -635,6 +638,7 @@ export default function HomePage() {
       const data = await res.json();
 
       if (!res.ok) {
+        console.error("API /api/pit failed:", data);
         setPlannerError("AI 目前暫時忙碌中，先顯示系統預估版本給你。");
         setAiResult(null);
         return;
@@ -643,6 +647,7 @@ export default function HomePage() {
       const normalized = normalizeAIResult(data);
 
       if (!normalized) {
+        console.error("normalizeAIResult failed:", data);
         setPlannerError("AI 回覆格式暫時不完整，先顯示系統預估版本給你。");
         setAiResult(null);
         return;
@@ -650,7 +655,7 @@ export default function HomePage() {
 
       setAiResult(normalized);
     } catch (error) {
-      console.error(error);
+      console.error("AI fetch error:", error);
       setPlannerError("AI 連線失敗，先顯示系統預估版本給你。");
       setAiResult(null);
     } finally {
