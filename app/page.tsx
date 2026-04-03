@@ -618,7 +618,7 @@ export default function HomePage() {
     setAiResult(null);
 
     try {
-      const res = await fetch("/api/plan", {
+      const res = await fetch("/api/pit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
