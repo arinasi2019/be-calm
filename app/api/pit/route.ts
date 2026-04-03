@@ -17,6 +17,7 @@ type AIPlanResult = {
   warnings: string[];
   optimizedPlan: string[];
   bookingSuggestions: string[];
+  dailyPlan?: string[];
 };
 
 function cleanString(value: unknown) {
@@ -38,13 +39,15 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
     warnings: cleanArray(obj.warnings),
     optimizedPlan: cleanArray(obj.optimizedPlan),
     bookingSuggestions: cleanArray(obj.bookingSuggestions),
+    dailyPlan: cleanArray(obj.dailyPlan),
   };
 
   if (
     !result.summary &&
     result.warnings.length === 0 &&
     result.optimizedPlan.length === 0 &&
-    result.bookingSuggestions.length === 0
+    result.bookingSuggestions.length === 0 &&
+    (!result.dailyPlan || result.dailyPlan.length === 0)
   ) {
     return null;
   }
@@ -60,71 +63,59 @@ function buildFallbackResult(params: {
   style: string;
 }): AIPlanResult {
   const { destination, days, spots, companion, style } = params;
-
   const dayCount = Number(days || 0);
+
   const warnings: string[] = [];
   const optimizedPlan: string[] = [];
   const bookingSuggestions: string[] = [];
+  const dailyPlan: string[] = [];
 
   if (spots.length > 0 && dayCount > 0 && spots.length > dayCount * 3) {
-    warnings.push("你排的景點偏多，這趟行程很可能會太趕，轉場與排隊時間容易被低估。");
-  }
-
-  if (spots.some((spot) => /羅浮宮|louvre/i.test(spot)) && dayCount <= 1) {
-    warnings.push("如果有羅浮宮，通常不要只抓很短時間，很多人實際去了之後都覺得半天不夠。");
-  }
-
-  if (spots.some((spot) => /迪士尼|disney/i.test(spot)) && companion.includes("家庭")) {
-    warnings.push("親子行程不要把熱門樂園和太多移動排在同一天，體力和排隊時間都容易失控。");
-  }
-
-  if (companion.includes("長輩")) {
-    warnings.push("有長輩同行時，建議保留更多休息與交通緩衝，不要把一天排太滿。");
-  }
-
-  if (style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆行程，建議每天主景點 1–2 個就好，不要塞太多順路景點。");
-  }
-
-  if (warnings.length === 0) {
-    warnings.push("目前看起來沒有特別明顯的爆雷點，但還是建議提前確認熱門景點的停留時間與預約需求。");
-  }
-
-  optimizedPlan.push(`先把 ${destination} 的景點分成「必去」與「可刪」兩層，避免全部硬塞在同一天。`);
-
-  if (dayCount > 0) {
-    optimizedPlan.push(`以 ${dayCount} 天來看，建議每天只安排 1–2 個主要景點，再搭配附近散步、購物或用餐。`);
-  } else {
-    optimizedPlan.push("建議先確認實際停留天數，這會直接影響動線是否合理。");
-  }
-
-  if (spots.length > 0) {
-    optimizedPlan.push(`優先把同區域的點排在一起，例如：${spots.slice(0, 2).join(" / ")}，不要反覆跨區來回。`);
-  } else {
-    optimizedPlan.push(`如果還沒決定景點，可以先從 ${destination} 最核心的區域開始排，再慢慢補次要景點。`);
+    warnings.push("你現在塞的景點偏多，真實走起來很可能會太趕，移動與排隊時間會比想像中更長。");
   }
 
   if (companion.includes("家庭")) {
-    optimizedPlan.push("親子行程建議加上午休、提早晚餐或保留回飯店休息時間。");
+    warnings.push("家庭親子行程不要把熱門景點排太滿，吃飯、休息與臨時狀況都需要額外緩衝。");
   }
 
   if (companion.includes("長輩")) {
-    optimizedPlan.push("長輩同行建議減少換車次數，必要時優先考慮包車或接送。");
+    warnings.push("長輩同行時，轉車次數太多會很消耗體力，建議優先減少跨區移動。");
+  }
+
+  if (style.includes("輕鬆")) {
+    warnings.push("你想走輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
+  }
+
+  if (warnings.length === 0) {
+    warnings.push("目前沒有明顯爆雷，但仍建議先確認熱門景點停留時間與是否需要提前預約。");
+  }
+
+  optimizedPlan.push(`先把 ${destination} 的景點分成「必去」與「可刪」，不要一開始就全部硬塞。`);
+  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，建議每天 1–2 個主景點，再搭配附近散步、購物或吃飯。`);
+
+  if (spots.length > 0) {
+    optimizedPlan.push(`同區域景點應排在同一天，例如：${spots.slice(0, 2).join(" / ")} 這類不要來回跨區。`);
   }
 
   bookingSuggestions.push("熱門景點門票");
   bookingSuggestions.push("機場接送 / 市區接送");
-  bookingSuggestions.push("一日遊 / 導覽行程");
+  bookingSuggestions.push("一日遊 / 當地導覽");
 
   if (companion.includes("家庭")) {
-    bookingSuggestions.push("親子友善體驗或快速入場產品");
+    bookingSuggestions.push("親子友善體驗 / 快速入場");
+  }
+
+  const safeDayCount = dayCount > 0 ? dayCount : 3;
+  for (let i = 1; i <= Math.min(safeDayCount, 5); i++) {
+    dailyPlan.push(`Day ${i}：安排 1–2 個核心景點，避免跨區來回，下午保留用餐與休息緩衝。`);
   }
 
   return {
-    summary: `${destination} 這趟行程可以成行，但建議先處理動線、停留時間與是否需要提前預約，這樣整體體驗會順很多。`,
+    summary: `${destination} 這趟不是不能去，而是目前安排還不夠像真正能走的行程。建議先處理動線、節奏與預約項目，體驗會差很多。`,
     warnings,
     optimizedPlan,
     bookingSuggestions,
+    dailyPlan,
   };
 }
 
@@ -165,10 +156,15 @@ export async function POST(req: Request) {
     const client = new OpenAI({ apiKey });
 
     const systemPrompt = `
-你是一位專業旅遊規劃顧問，專門做三件事：
-1. 幫旅客找出行程中的踩坑風險
-2. 優化成更合理的旅遊安排
-3. 提出可直接預約的商品方向
+你不是一般摘要機器，你是一位真的很會排自由行的資深旅遊顧問。
+你的任務不是講空話，而是幫使用者把原本很模糊、很容易踩坑的想法，整理成真正可執行的旅行安排。
+
+你的回答風格要求：
+1. 要像真的懂旅遊的人，不要像客服話術
+2. 要明確指出哪裡不合理
+3. 要給出實際可走的安排
+4. 要有取捨，不要每個地方都說可以去
+5. 要像在幫朋友規劃，不要講太空泛
 
 你只能輸出 JSON。
 你只能使用繁體中文。
@@ -176,38 +172,47 @@ export async function POST(req: Request) {
 `;
 
     const userPrompt = `
-請根據以下資訊回答：
+請根據以下資訊，幫我做真正有用的旅遊規劃：
 
 目的地：${destination}
 天數：${days || "未指定"}
-想去景點：${spots.join("、") || "未指定，請依目的地自動建議"}
+想去景點：${spots.join("、") || "未指定，請你主動幫我規劃"}
 同行類型：${companion || "未指定"}
 偏好節奏：${style || "未指定"}
 
-請輸出格式如下：
+請輸出 JSON，格式如下：
 
 {
-  "summary": "用 2 到 3 句繁體中文總結這趟行程的主要風險與建議",
+  "summary": "用 2 到 4 句繁體中文，直接說出這趟行程目前最大的問題、節奏感、值不值得這樣排",
   "warnings": [
-    "3 到 5 條具體避坑提醒"
+    "3 到 5 條具體避坑提醒，要真的指出哪裡會後悔"
   ],
   "optimizedPlan": [
-    "4 到 6 條具體行程優化建議"
+    "4 到 6 條具體優化建議，要有取捨與排序邏輯"
+  ],
+  "dailyPlan": [
+    "Day 1：實際安排",
+    "Day 2：實際安排",
+    "Day 3：實際安排"
   ],
   "bookingSuggestions": [
-    "3 到 5 個適合直接預約的項目，例如：熱門景點門票、機場接送、導覽、一日遊、包車"
+    "3 到 5 個最值得先預約的項目"
   ]
 }
 
-要求：
-- 要具體，不要空泛
-- 避坑提醒要像真正懂旅遊的人會說的
-- 如果使用者沒有提供景點，就依目的地與天數主動提出合理建議
+規則：
+- 不能只講『每天 1-2 個景點』這種太空泛的句子
+- 要具體說明怎麼排比較合理
+- 若使用者沒有提供景點，就主動規劃該城市最合理的初次旅行版本
+- 若行程太空，請主動補強
+- 若行程太滿，請主動刪減
+- 若適合先訂票、接送、導覽、包車，要明確提出
+- dailyPlan 一定要真的像可以拿去執行的版本
 `;
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.7,
+      temperature: 0.8,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -239,6 +244,7 @@ export async function POST(req: Request) {
     }
 
     const normalized = normalizeAIResult(parsed);
+
     if (!normalized) {
       console.error("normalizeAIResult failed:", parsed);
       return NextResponse.json(
