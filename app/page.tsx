@@ -44,22 +44,35 @@ type Post = {
 
 type CompanionType = "一個人" | "情侶" | "朋友" | "家庭親子" | "長輩同行";
 
+type BookingSuggestion = {
+  title: string;
+  reason: string;
+  href: string;
+  buttonLabel: string;
+  badge: string;
+  sourceLabel?: string;
+};
+
 type PlannerResult = {
   warnings: string[];
   optimizedPlan: string[];
-  bookingSuggestions: string[];
+  bookingSuggestions: BookingSuggestion[];
   dailyPlan: string[];
   summary?: string;
   content?: string;
 };
 
-type BookingCard = {
+type BookingCandidate = {
+  id: number;
   title: string;
-  description: string;
+  place_name?: string | null;
+  description?: string | null;
+  category?: string | null;
+  country?: string | null;
+  city?: string | null;
+  location?: string | null;
   href: string;
-  buttonLabel: string;
-  badge: string;
-  sourceLabel?: string;
+  sourceLabel?: string | null;
 };
 
 function normalizeText(value: string) {
@@ -73,15 +86,40 @@ function parseSpots(input: string) {
     .filter(Boolean);
 }
 
-function uniqueStrings(items: string[]) {
-  return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
-}
-
 function safeArray(input: unknown) {
   if (!Array.isArray(input)) return [];
   return input
     .map((item) => String(item ?? "").trim())
     .filter(Boolean);
+}
+
+function normalizeBookingSuggestions(input: unknown): BookingSuggestion[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const obj = item as Record<string, unknown>;
+
+      const title = String(obj.title ?? "").trim();
+      const reason = String(obj.reason ?? "").trim();
+      const href = String(obj.href ?? "").trim();
+      const buttonLabel = String(obj.buttonLabel ?? "").trim() || "查看方案";
+      const badge = String(obj.badge ?? "").trim() || "推薦";
+      const sourceLabel = String(obj.sourceLabel ?? "").trim() || undefined;
+
+      if (!title || !reason || !href) return null;
+
+      return {
+        title,
+        reason,
+        href,
+        buttonLabel,
+        badge,
+        sourceLabel,
+      };
+    })
+    .filter(Boolean) as BookingSuggestion[];
 }
 
 function normalizeAIResult(input: unknown): PlannerResult | null {
@@ -91,8 +129,8 @@ function normalizeAIResult(input: unknown): PlannerResult | null {
 
   const warnings = safeArray(obj.warnings);
   const optimizedPlan = safeArray(obj.optimizedPlan);
-  const bookingSuggestions = safeArray(obj.bookingSuggestions);
   const dailyPlan = safeArray(obj.dailyPlan);
+  const bookingSuggestions = normalizeBookingSuggestions(obj.bookingSuggestions);
   const summary =
     typeof obj.summary === "string" && obj.summary.trim()
       ? obj.summary.trim()
@@ -129,14 +167,14 @@ function buildPlannerFallbackResult(params: {
   spots: string[];
   companion: CompanionType;
   style: string;
+  bookingCandidates: BookingCandidate[];
 }): PlannerResult {
   const warnings: string[] = [];
   const optimizedPlan: string[] = [];
-  const bookingSuggestions: string[] = [];
   const dailyPlan: string[] = [];
+  const bookingSuggestions: BookingSuggestion[] = [];
 
   const dayCount = Number(params.days || 0);
-  const spotCount = params.spots.length;
   const destination = params.destination.trim();
 
   if (!destination) {
@@ -150,85 +188,64 @@ function buildPlannerFallbackResult(params: {
     };
   }
 
-  if (dayCount > 0 && spotCount > dayCount * 3) {
-    warnings.push("你排的點偏多，整體節奏可能會太趕，轉場時間容易被低估。");
+  if (params.spots.length > 0 && dayCount > 0 && params.spots.length > dayCount * 3) {
+    warnings.push("你現在列的點偏多，實際走起來很容易太趕。");
   }
 
-  if (params.spots.some((spot) => /羅浮宮|louvre/i.test(spot)) && dayCount <= 1) {
-    warnings.push("如果有羅浮宮，通常不要只抓很短時間，很多人實際去後都覺得半天不夠。");
-  }
-
-  if (
-    params.spots.some((spot) => /迪士尼|disney/i.test(spot)) &&
-    params.companion === "家庭親子"
-  ) {
-    warnings.push("親子行程不要把熱門大景點和太多移動排在同一天，小孩體力和排隊時間常常會失控。");
+  if (params.companion === "家庭親子") {
+    warnings.push("親子行程不要把熱門景點、購物與長距離移動塞同一天。");
   }
 
   if (params.companion === "長輩同行") {
-    warnings.push("有長輩同行時，行程建議保留更多休息與交通緩衝，不要把一天排太滿。");
+    warnings.push("長輩同行時，真正累的通常不是景點，而是轉車和反覆移動。");
   }
 
   if (params.style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆行程，建議每天主景點 1–2 個就好，不要塞太多『順便』景點。");
+    warnings.push("你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
   }
 
   if (warnings.length === 0) {
-    warnings.push("目前看起來沒有明顯爆雷點，但還是建議確認熱門景點的停留時間與預約需求。");
+    warnings.push("目前沒有明顯大雷，但建議先確認每天主區域與轉場節奏。");
   }
 
-  optimizedPlan.push(`先把 ${destination} 的核心景點分成「必去」和「可刪」兩層，避免全部硬塞在同一天。`);
+  optimizedPlan.push(`先把 ${destination} 的景點分成「一定要去」和「有空再去」。`);
+  optimizedPlan.push(`以 ${params.days || "這次"} 的天數看，每天以 1 個主區域最舒服。`);
+  optimizedPlan.push("早上排最重要的點，下午留給附近散步、咖啡、購物或休息。");
 
-  if (dayCount > 0) {
-    optimizedPlan.push(`以 ${dayCount} 天來看，建議每天只安排 1–2 個主要景點，再搭配附近散步或用餐。`);
-  } else {
-    optimizedPlan.push("建議先確認你實際停留天數，這會直接影響動線是否合理。");
-  }
-
-  if (params.spots.length > 0) {
-    optimizedPlan.push(`優先把同區域的點排在一起，例如：${params.spots.slice(0, 2).join(" / ")} 不要反覆跨區來回。`);
-  }
-
-  if (params.companion === "家庭親子") {
-    optimizedPlan.push("親子行程建議加上午休、提早晚餐或保留回飯店休息時間。");
-  }
-
-  if (params.companion === "長輩同行") {
-    optimizedPlan.push("長輩同行建議減少換車次數，必要時優先考慮包車或接送。");
-  }
-
-  bookingSuggestions.push("熱門景點門票");
-  bookingSuggestions.push("機場接送 / 市區接送");
-  bookingSuggestions.push("一日遊 / 導覽行程");
-
-  if (params.companion === "家庭親子") {
-    bookingSuggestions.push("親子友善體驗或快速入場產品");
-  }
-
-  const safeDayCount = Math.max(1, Math.min(dayCount || 3, 5));
+  const safeDayCount = Math.max(1, Math.min(dayCount || 3, 6));
   for (let i = 1; i <= safeDayCount; i++) {
-    dailyPlan.push(`Day ${i}：安排 1–2 個核心景點，避免跨區來回，下午保留用餐與休息緩衝。`);
+    dailyPlan.push(`Day ${i}：先排一個主區域與一個重點景點，避免跨區折返。`);
   }
 
-  const content = [
-    `這趟 ${destination} 行程不是不能玩，而是目前比較像「想去清單」，還不像真正能舒服執行的旅行版本。`,
-    `我會建議你先把節奏放慢，把最想去的點留下，把只是順便的點刪掉，整體體驗會好很多。`,
-    "",
-    "你現在最該注意的是：",
-    "• 不要一天塞太多主景點",
-    "• 同區域景點放同一天",
-    "• 熱門景點與移動時間要留緩衝",
-    "",
-    "如果你要走比較有感覺的版本，這趟行程最好至少有一餐、一次散步、一次完全不趕時間的空檔。",
-  ].join("\n");
+  bookingSuggestions.push(
+    ...params.bookingCandidates.slice(0, 4).map((item, index) => ({
+      title: item.place_name || item.title,
+      reason:
+        index === 0
+          ? "這個最適合先鎖定，能先把主線行程定下來。"
+          : "這個可作為你這趟行程的候選預約項目。",
+      href: item.href,
+      buttonLabel: "查看方案",
+      badge: index === 0 ? "優先預約" : "候選方案",
+      sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+    }))
+  );
 
   return {
-    warnings: uniqueStrings(warnings),
-    optimizedPlan: uniqueStrings(optimizedPlan),
-    bookingSuggestions: uniqueStrings(bookingSuggestions),
-    dailyPlan: uniqueStrings(dailyPlan),
-    summary: `${destination} 這趟行程目前可以成行，但建議先處理動線、停留時間與是否需要提前預約。`,
-    content,
+    warnings,
+    optimizedPlan,
+    bookingSuggestions,
+    dailyPlan,
+    summary: `${destination} 這趟目前比較像願望清單，還不是最舒服的執行版本。先把每天主區域和該先訂的項目定下來，整體體驗會更好。`,
+    content: [
+      `這趟 ${destination}，我不建議一開始就追求去很多地方。`,
+      `真正好玩的自由行，是每天都有重點，但又不會一直在趕路。`,
+      "",
+      "你應該先做的事：",
+      "1. 先定每天主區域",
+      "2. 先鎖最值得預約的門票 / 接送 / 體驗",
+      "3. 剩下再補散步、購物和咖啡店",
+    ].join("\n"),
   };
 }
 
@@ -244,112 +261,27 @@ function getPostActionLabel(post: Post) {
   return "看避坑文";
 }
 
-function buildBookingCards(
-  suggestions: string[],
-  relatedPosts: Post[],
-  destination: string
-): BookingCard[] {
-  const lowerDestination = normalizeText(destination);
-
-  const findBestPost = (keywordList: string[]) => {
-    const matched = relatedPosts.find((post) => {
-      const haystack = [
-        post.title,
-        post.place_name,
-        post.country,
-        post.city,
-        post.location,
-        post.content,
-        ...(post.hashtags || []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return keywordList.some((keyword) => haystack.includes(keyword.toLowerCase()));
-    });
-
-    return matched || relatedPosts[0] || null;
-  };
-
-  return suggestions.map((suggestion) => {
-    const lower = suggestion.toLowerCase();
-
-    if (lower.includes("門票") || lower.includes("景點")) {
-      const matchedPost = findBestPost([
-        "門票",
-        "景點",
-        "museum",
-        "ticket",
-        lowerDestination,
-      ]);
-
-      return {
-        title: suggestion,
-        description: "適合先把熱門景點門票鎖定，避免現場排隊或客滿。",
-        href: matchedPost ? getPostPrimaryActionLink(matchedPost) : "#",
-        buttonLabel: matchedPost ? getPostActionLabel(matchedPost) : "之後接門票",
-        badge: "熱門景點",
-        sourceLabel: matchedPost ? (matchedPost.place_name || matchedPost.title) : undefined,
-      };
-    }
-
-    if (lower.includes("接送") || lower.includes("機場")) {
-      const matchedPost = findBestPost([
-        "接送",
-        "機場",
-        "airport",
-        "transfer",
-        lowerDestination,
-      ]);
-
-      return {
-        title: suggestion,
-        description: "如果轉場多、同行有長輩或小孩，先排好接送通常最省事。",
-        href: matchedPost ? getPostPrimaryActionLink(matchedPost) : "#",
-        buttonLabel: matchedPost ? getPostActionLabel(matchedPost) : "之後接接送",
-        badge: "移動安排",
-        sourceLabel: matchedPost ? (matchedPost.place_name || matchedPost.title) : undefined,
-      };
-    }
-
-    if (lower.includes("導覽") || lower.includes("一日遊") || lower.includes("tour")) {
-      const matchedPost = findBestPost([
-        "導覽",
-        "一日遊",
-        "tour",
-        "guide",
-        lowerDestination,
-      ]);
-
-      return {
-        title: suggestion,
-        description: "當地導覽或一日遊適合補足交通、語言或動線安排。",
-        href: matchedPost ? getPostPrimaryActionLink(matchedPost) : "#",
-        buttonLabel: matchedPost ? getPostActionLabel(matchedPost) : "之後接導覽",
-        badge: "體驗商品",
-        sourceLabel: matchedPost ? (matchedPost.place_name || matchedPost.title) : undefined,
-      };
-    }
-
-    const matchedPost = relatedPosts[0] || null;
-
-    return {
-      title: suggestion,
-      description: "先看 AI 建議，再根據真實避坑內容決定是否預約。",
-      href: matchedPost ? getPostPrimaryActionLink(matchedPost) : "#",
-      buttonLabel: matchedPost ? getPostActionLabel(matchedPost) : "查看建議",
-      badge: "推薦方案",
-      sourceLabel: matchedPost ? (matchedPost.place_name || matchedPost.title) : undefined,
-    };
-  });
+function buildBookingCandidates(posts: Post[]): BookingCandidate[] {
+  return posts
+    .filter((post) => Boolean(post.external_url || post.google_maps_url))
+    .map((post) => ({
+      id: post.id,
+      title: post.title,
+      place_name: post.place_name || null,
+      description: post.content || null,
+      category: post.category || null,
+      country: post.country || null,
+      city: post.city || null,
+      location: post.location || null,
+      href: getPostPrimaryActionLink(post),
+      sourceLabel: post.place_name || post.title,
+    }));
 }
 
 function TravelPitfallCard({ post }: { post: Post }) {
   const locationText = [post.country, post.city, post.location].filter(Boolean).join(" · ");
   const actionHref = getPostPrimaryActionLink(post);
   const actionLabel = getPostActionLabel(post);
-
   const isExternal = Boolean(post.external_url || post.google_maps_url);
 
   return (
@@ -374,9 +306,7 @@ function TravelPitfallCard({ post }: { post: Post }) {
           <div className="mt-1 text-sm text-slate-600">{post.title}</div>
         )}
 
-        {locationText && (
-          <div className="mt-2 text-xs text-slate-500">{locationText}</div>
-        )}
+        {locationText && <div className="mt-2 text-xs text-slate-500">{locationText}</div>}
 
         <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">
           {post.content}
@@ -476,7 +406,7 @@ function ResultListCard({
   );
 }
 
-function BookingCardView({ card }: { card: BookingCard }) {
+function BookingCardView({ card }: { card: BookingSuggestion }) {
   const isExternal = card.href.startsWith("http");
 
   return (
@@ -493,8 +423,9 @@ function BookingCardView({ card }: { card: BookingCard }) {
       </div>
 
       <div className="mt-3 text-sm font-bold text-emerald-900">{card.title}</div>
-
-      <div className="mt-2 text-xs leading-5 text-emerald-800">{card.description}</div>
+      <div className="mt-2 text-xs leading-6 text-emerald-800 whitespace-pre-wrap">
+        {card.reason}
+      </div>
 
       {isExternal ? (
         <a
@@ -522,7 +453,7 @@ function LongformAdviceCard({ content }: { content: string }) {
     <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
       <div className="text-lg font-black text-slate-900">AI 顧問版完整建議</div>
       <div className="mt-1 text-sm text-slate-500">
-        這裡會像真人旅遊顧問一樣，把節奏、取捨與體驗感講清楚。
+        這裡會像真人旅遊顧問一樣，把節奏、取捨、預約順序講清楚。
       </div>
 
       <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-8 text-slate-700 whitespace-pre-wrap">
@@ -588,26 +519,12 @@ export default function HomePage() {
 
   const parsedSpots = useMemo(() => parseSpots(spotsInput), [spotsInput]);
 
-  const fallbackPlannerResult = useMemo(
-    () =>
-      buildPlannerFallbackResult({
-        destination,
-        days,
-        spots: parsedSpots,
-        companion,
-        style,
-      }),
-    [destination, days, parsedSpots, companion, style]
-  );
-
-  const effectivePlanner = aiResult || fallbackPlannerResult;
-
   const relatedPosts = useMemo(() => {
     const dest = normalizeText(destination);
     const spotKeywords = parsedSpots.map(normalizeText);
 
     if (!dest && spotKeywords.length === 0) {
-      return posts.slice(0, 6);
+      return posts.slice(0, 8);
     }
 
     const scored = posts
@@ -627,29 +544,43 @@ export default function HomePage() {
 
         let score = 0;
 
-        if (dest && haystack.includes(dest)) score += 3;
+        if (dest && haystack.includes(dest)) score += 4;
 
         for (const keyword of spotKeywords) {
           if (keyword && haystack.includes(keyword)) score += 2;
         }
 
+        if (post.external_url) score += 1;
+        if (post.google_maps_url) score += 1;
+
         return { post, score };
       })
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
+      .slice(0, 8)
       .map((item) => item.post);
 
-    return scored.length > 0 ? scored : posts.slice(0, 6);
+    return scored.length > 0 ? scored : posts.slice(0, 8);
   }, [posts, destination, parsedSpots]);
 
-  const bookingCards = useMemo(() => {
-    return buildBookingCards(
-      effectivePlanner.bookingSuggestions || [],
-      relatedPosts,
-      destination
-    );
-  }, [effectivePlanner.bookingSuggestions, relatedPosts, destination]);
+  const bookingCandidates = useMemo(() => {
+    return buildBookingCandidates(relatedPosts);
+  }, [relatedPosts]);
+
+  const fallbackPlannerResult = useMemo(
+    () =>
+      buildPlannerFallbackResult({
+        destination,
+        days,
+        spots: parsedSpots,
+        companion,
+        style,
+        bookingCandidates,
+      }),
+    [destination, days, parsedSpots, companion, style, bookingCandidates]
+  );
+
+  const effectivePlanner = aiResult || fallbackPlannerResult;
 
   async function handlePlanNow() {
     if (!destination.trim()) {
@@ -674,6 +605,7 @@ export default function HomePage() {
           spots: parsedSpots,
           companion,
           style,
+          bookingCandidates,
         }),
       });
 
@@ -681,7 +613,7 @@ export default function HomePage() {
 
       if (!res.ok) {
         console.error("API /api/pit failed:", data);
-        setPlannerError("AI 目前暫時忙碌中，先顯示系統預估版本給你。");
+        setPlannerError("AI 暫時沒有成功回覆，先顯示系統預估版本。");
         setAiResult(null);
         return;
       }
@@ -690,7 +622,7 @@ export default function HomePage() {
 
       if (!normalized) {
         console.error("normalizeAIResult failed:", data);
-        setPlannerError("AI 回覆格式暫時不完整，先顯示系統預估版本給你。");
+        setPlannerError("AI 回覆格式不完整，先顯示系統預估版本。");
         setAiResult(null);
         return;
       }
@@ -698,7 +630,7 @@ export default function HomePage() {
       setAiResult(normalized);
     } catch (error) {
       console.error("AI fetch error:", error);
-      setPlannerError("AI 連線失敗，先顯示系統預估版本給你。");
+      setPlannerError("AI 連線失敗，先顯示系統預估版本。");
       setAiResult(null);
     } finally {
       setLoadingAI(false);
@@ -714,7 +646,7 @@ export default function HomePage() {
           <div className="grid gap-6 px-5 py-6 sm:px-7 sm:py-8 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="max-w-2xl">
               <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
-                AI 旅遊避坑 × 行程優化
+                AI 旅遊避坑 × 行程優化 × 導購
               </div>
 
               <h1 className="mt-4 text-3xl font-black leading-tight sm:text-5xl">
@@ -725,7 +657,7 @@ export default function HomePage() {
 
               <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
                 不只是看負評，而是先檢查你的旅程安排有沒有太趕、太雷、太容易後悔。
-                看別人踩過哪些坑，再讓 AI 幫你把行程調整得更合理。
+                AI 會像真人旅遊顧問一樣幫你重排，並直接挑出適合先預約的方案。
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -736,10 +668,10 @@ export default function HomePage() {
                   動線優化
                 </span>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  景點安排建議
+                  每日規劃
                 </span>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  預約導流
+                  直接導購
                 </span>
               </div>
             </div>
@@ -747,7 +679,7 @@ export default function HomePage() {
             <div className="rounded-[28px] border border-white/10 bg-white/95 p-4 text-slate-900 shadow-2xl backdrop-blur">
               <div className="text-sm font-bold text-slate-900">AI 行程診斷</div>
               <div className="mt-1 text-xs leading-6 text-slate-500">
-                輸入你的旅行安排後，先用 AI 幫你抓出節奏、動線、停留時間與預約風險。
+                輸入你的旅行安排後，AI 會幫你抓節奏、動線、停留時間與預約優先順序。
               </div>
 
               <div className="mt-4 space-y-4">
@@ -757,7 +689,7 @@ export default function HomePage() {
                     type="text"
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
-                    placeholder="例如：巴黎 / 東京 / 京都 / 首爾"
+                    placeholder="例如：東京 / 京都 / 大阪 / 首爾"
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                   />
                 </div>
@@ -796,7 +728,7 @@ export default function HomePage() {
                     value={spotsInput}
                     onChange={(e) => setSpotsInput(e.target.value)}
                     rows={4}
-                    placeholder="例如：羅浮宮、奧賽美術館、塞納河遊船、巴黎鐵塔"
+                    placeholder="例如：淺草、上野、晴空塔 / 沒有安排，幫我規劃"
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
                   />
                   <div className="mt-2 text-xs text-slate-400">
@@ -821,7 +753,7 @@ export default function HomePage() {
                   disabled={loadingAI}
                   className="w-full rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:opacity-60"
                 >
-                  {loadingAI ? "AI 分析中..." : "開始診斷我的行程"}
+                  {loadingAI ? "AI 規劃中..." : "開始診斷我的行程"}
                 </button>
               </div>
             </div>
@@ -841,9 +773,9 @@ export default function HomePage() {
             title="AI 行程總結"
             body={
               !hasPlanned
-                ? "先輸入你的目的地與想去的點，這裡會先給你整體風險與建議摘要。"
+                ? "先輸入目的地、天數、同行類型與想去的地方，這裡會先給你整體判斷。"
                 : effectivePlanner.summary ||
-                  `${destination || "這趟旅程"} 目前已完成初步診斷，建議你先看避坑提醒，再往下看優化後行程與可直接預約的方案。`
+                  `${destination || "這趟旅程"} 已完成初步診斷，建議先看避坑提醒，再往下看優化版與可直接預約的方案。`
             }
           />
 
@@ -852,33 +784,37 @@ export default function HomePage() {
             subtitle="先看你的安排哪裡最容易出問題。"
             items={hasPlanned ? effectivePlanner.warnings : []}
             tone="amber"
-            emptyText="先輸入你的目的地與想去的點，這裡會顯示 AI 的避坑提醒。"
+            emptyText="完成上方輸入後，這裡會顯示 AI 的避坑提醒。"
           />
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
           <ResultListCard
             title="優化後行程方向"
-            subtitle="先把容易後悔的地方改掉，再決定怎麼訂。"
+            subtitle="不是叫你全部照原本的去，而是幫你重排成更順的版本。"
             items={hasPlanned ? effectivePlanner.optimizedPlan : []}
             tone="sky"
             numbered
-            emptyText="完成上方輸入後，這裡會先產出一版優化方向。"
+            emptyText="完成上方輸入後，這裡會產出更像真人顧問的優化方向。"
           />
 
           <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-lg font-black text-slate-900">建議你直接預約的方案</div>
+            <div className="text-lg font-black text-slate-900">建議你先訂的方案</div>
             <div className="mt-1 text-sm text-slate-500">
-              看完避坑與優化後，下一步就是把該訂的東西先鎖下來。
+              這裡不是固定模板，而是 AI 根據你的行程與候選商品挑出來的。
             </div>
 
             {!hasPlanned ? (
               <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                完成行程診斷後，這裡會顯示更適合你的預約方向。
+                完成行程診斷後，這裡會顯示更具體的預約建議。
+              </div>
+            ) : effectivePlanner.bookingSuggestions.length === 0 ? (
+              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                目前還沒有對應的可預約候選項目，可以先補更多目的地相關內容或商品。
               </div>
             ) : (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {bookingCards.map((card, index) => (
+                {effectivePlanner.bookingSuggestions.map((card, index) => (
                   <BookingCardView key={`${card.title}-${index}`} card={card} />
                 ))}
               </div>
@@ -889,11 +825,10 @@ export default function HomePage() {
         <section className="mt-6">
           <ResultListCard
             title="AI 每日行程建議"
-            subtitle="這裡不是空泛提醒，而是可直接照著走的 Day by Day 版本。"
-            items={hasPlanned ? effectivePlanner.dailyPlan || [] : []}
+            subtitle="這裡會更像 ChatGPT 幫你真的排出可執行的 Day by Day。"
+            items={hasPlanned ? effectivePlanner.dailyPlan : []}
             tone="emerald"
-            numbered={false}
-            emptyText="完成診斷後，這裡會出現 AI 幫你重新整理過的每日行程。"
+            emptyText="完成診斷後，這裡會出現每日行程版本。"
           />
         </section>
 
@@ -901,9 +836,8 @@ export default function HomePage() {
           <LongformAdviceCard
             content={
               !hasPlanned
-                ? "等你輸入目的地、天數與偏好後，這裡會出現更像真人旅遊顧問的完整規劃建議。"
-                : effectivePlanner.content ||
-                  "目前還沒有更完整的顧問版建議內容。"
+                ? "等你輸入目的地、天數與偏好後，這裡會出現更像真人旅遊顧問的完整建議。"
+                : effectivePlanner.content || "目前還沒有更完整的顧問版建議內容。"
             }
           />
         </section>
@@ -936,75 +870,19 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-lg font-black text-slate-900">一鍵預約方向</div>
-          <div className="mt-1 text-sm text-slate-500">
-            這裡可以當成你的導購區，後續可接 Klook、Viator、你自己的接送或包車方案。
-          </div>
-
-          {!hasPlanned ? (
-            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-              完成行程診斷後，這裡會顯示更適合你的預約方向。
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {effectivePlanner.bookingSuggestions.map((item, index) => (
-                <div
-                  key={`${item}-${index}`}
-                  className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4"
-                >
-                  <div className="text-sm font-bold text-emerald-900">{item}</div>
-                  <div className="mt-2 text-xs leading-5 text-emerald-800">
-                    可接景點門票、接送、導覽、一日遊或你自己的商品。
-                  </div>
-
-                  {bookingCards[index] ? (
-                    bookingCards[index].href.startsWith("http") ? (
-                      <a
-                        href={bookingCards[index].href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-4 inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-                      >
-                        {bookingCards[index].buttonLabel}
-                      </a>
-                    ) : (
-                      <Link
-                        href={bookingCards[index].href}
-                        className="mt-4 inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-                      >
-                        {bookingCards[index].buttonLabel}
-                      </Link>
-                    )
-                  ) : (
-                    <button
-                      type="button"
-                      className="mt-4 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-                    >
-                      之後接預約
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
         <section className="mx-auto max-w-5xl px-1 pb-8 pt-10 text-sm leading-relaxed text-slate-600">
           <h2 className="mb-3 text-lg font-bold text-slate-900">關於 BeCalm Travel</h2>
 
           <p className="mb-3">
-            BeCalm Travel 不是單純的旅遊負評站，而是把「真實踩坑內容」和
-            「AI 行程優化」結合起來的旅行決策工具。
+            BeCalm Travel 不是單純的旅遊負評站，而是把真實踩坑內容和 AI 行程優化結合起來的旅行決策工具。
           </p>
 
           <p className="mb-3">
-            你可以先輸入自己的行程安排，看哪些景點排法太趕、哪些地方實際上不值得、
-            哪些動線很容易後悔，再根據別人的真實經驗調整成更合理的版本。
+            你可以先輸入自己的安排，看哪些景點排法太趕、哪些動線很容易後悔、哪些東西應該先訂，再根據真實內容調整成更合理的版本。
           </p>
 
           <p>
-            這版已經可以直接接上真正 AI 回覆，並把景點門票、接送、體驗或你自己的包車服務放進導購流程裡。
+            這一版的重點，是讓 AI 不只會說建議，還能直接挑出可以導購、可以預約的方案。
           </p>
         </section>
       </div>

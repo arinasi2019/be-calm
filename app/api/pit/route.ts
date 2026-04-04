@@ -4,19 +4,42 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
+type BookingCandidate = {
+  id: number | string;
+  title: string;
+  place_name?: string | null;
+  description?: string | null;
+  category?: string | null;
+  country?: string | null;
+  city?: string | null;
+  location?: string | null;
+  href?: string | null;
+  sourceLabel?: string | null;
+};
+
 type RequestBody = {
   destination?: string;
   days?: string | number;
   spots?: string[];
   companion?: string;
   style?: string;
+  bookingCandidates?: BookingCandidate[];
+};
+
+type BookingSuggestion = {
+  title: string;
+  reason: string;
+  href: string;
+  buttonLabel: string;
+  badge: string;
+  sourceLabel?: string;
 };
 
 type AIPlanResult = {
   summary: string;
   warnings: string[];
   optimizedPlan: string[];
-  bookingSuggestions: string[];
+  bookingSuggestions: BookingSuggestion[];
   dailyPlan: string[];
   content: string;
 };
@@ -30,6 +53,62 @@ function cleanArray(value: unknown) {
   return value.map((item) => cleanString(item)).filter(Boolean);
 }
 
+function cleanBookingCandidates(value: unknown): BookingCandidate[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const obj = item as Record<string, unknown>;
+
+      const href = cleanString(obj.href);
+      if (!href) return null;
+
+      return {
+        id: cleanString(obj.id),
+        title: cleanString(obj.title),
+        place_name: cleanString(obj.place_name) || null,
+        description: cleanString(obj.description) || null,
+        category: cleanString(obj.category) || null,
+        country: cleanString(obj.country) || null,
+        city: cleanString(obj.city) || null,
+        location: cleanString(obj.location) || null,
+        href,
+        sourceLabel: cleanString(obj.sourceLabel) || null,
+      };
+    })
+    .filter(Boolean) as BookingCandidate[];
+}
+
+function normalizeBookingSuggestions(value: unknown): BookingSuggestion[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const obj = item as Record<string, unknown>;
+
+      const title = cleanString(obj.title);
+      const reason = cleanString(obj.reason);
+      const href = cleanString(obj.href);
+      const buttonLabel = cleanString(obj.buttonLabel) || "查看方案";
+      const badge = cleanString(obj.badge) || "推薦";
+      const sourceLabel = cleanString(obj.sourceLabel) || undefined;
+
+      if (!title || !reason || !href) return null;
+
+      return {
+        title,
+        reason,
+        href,
+        buttonLabel,
+        badge,
+        sourceLabel,
+      };
+    })
+    .filter(Boolean) as BookingSuggestion[];
+}
+
 function normalizeAIResult(input: unknown): AIPlanResult | null {
   if (!input || typeof input !== "object") return null;
 
@@ -39,7 +118,7 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
     summary: cleanString(obj.summary),
     warnings: cleanArray(obj.warnings),
     optimizedPlan: cleanArray(obj.optimizedPlan),
-    bookingSuggestions: cleanArray(obj.bookingSuggestions),
+    bookingSuggestions: normalizeBookingSuggestions(obj.bookingSuggestions),
     dailyPlan: cleanArray(obj.dailyPlan),
     content: cleanString(obj.content),
   };
@@ -64,88 +143,92 @@ function buildFallbackResult(params: {
   spots: string[];
   companion: string;
   style: string;
+  bookingCandidates: BookingCandidate[];
 }): AIPlanResult {
-  const { destination, days, spots, companion, style } = params;
+  const { destination, days, spots, companion, style, bookingCandidates } = params;
 
   const dayCount = Number(days || 0);
   const warnings: string[] = [];
   const optimizedPlan: string[] = [];
-  const bookingSuggestions: string[] = [];
   const dailyPlan: string[] = [];
+  const bookingSuggestions: BookingSuggestion[] = [];
 
   if (spots.length > 0 && dayCount > 0 && spots.length > dayCount * 3) {
-    warnings.push("你現在塞的景點偏多，真實走起來很可能會太趕，尤其是移動、排隊與吃飯時間會比想像中更長。");
+    warnings.push("你現在想去的點偏多，真實走起來很容易因為排隊、吃飯、轉場而整體失控。");
   }
 
-  if (spots.some((spot) => /羅浮宮|louvre/i.test(spot)) && dayCount <= 1) {
-    warnings.push("如果有羅浮宮，通常不要只抓很短時間，很多人實際去了之後都會覺得半天根本不夠。");
-  }
-
-  if (spots.some((spot) => /迪士尼|disney/i.test(spot)) && companion.includes("家庭")) {
-    warnings.push("家庭親子行程不要把熱門景點排太滿，吃飯、休息、排隊與臨時狀況都需要額外緩衝。");
-  }
-
-  if (companion.includes("長輩")) {
-    warnings.push("有長輩同行時，轉車次數太多會很消耗體力，建議優先減少跨區移動。");
+  if (!spots.length) {
+    warnings.push("你目前還沒有列景點，代表最容易踩的坑不是太滿，而是到當地才臨時決定，最後浪費很多移動時間。");
   }
 
   if (style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
-  }
-
-  if (warnings.length === 0) {
-    warnings.push("目前沒有特別明顯的爆雷，但還是建議先確認熱門景點停留時間與預約需求。");
-  }
-
-  optimizedPlan.push(`先把 ${destination} 的景點分成「必去」與「可刪」，不要一開始就全部硬塞。`);
-  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，建議每天 1–2 個主景點，再搭配附近散步、購物或吃飯。`);
-
-  if (spots.length > 0) {
-    optimizedPlan.push(`同區域景點應排在同一天，例如：${spots.slice(0, 2).join(" / ")} 這類不要來回跨區。`);
-  } else {
-    optimizedPlan.push(`如果你還沒決定景點，先從 ${destination} 最核心的區域開始排，再補次要景點。`);
+    warnings.push("你偏好輕鬆節奏，就不適合一天塞太多『順路再去一下』的安排。");
   }
 
   if (companion.includes("家庭")) {
-    optimizedPlan.push("親子行程建議加入午休、提早晚餐或回飯店休息的空檔。");
+    warnings.push("親子行程不要把熱門景點、購物、長距離移動排在同一天，小朋友通常不是卡在體力，就是卡在吃飯與休息。");
   }
 
   if (companion.includes("長輩")) {
-    optimizedPlan.push("長輩同行建議優先考慮接送、包車或少換乘的路線。");
+    warnings.push("有長輩同行時，真正會累的不是景點本身，而是轉車、找路、反覆上下交通工具。");
   }
 
-  bookingSuggestions.push("熱門景點門票");
-  bookingSuggestions.push("機場接送 / 市區接送");
-  bookingSuggestions.push("一日遊 / 當地導覽");
+  if (warnings.length === 0) {
+    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天的主題區域排清楚，避免來回折返。");
+  }
 
-  if (companion.includes("家庭")) {
-    bookingSuggestions.push("親子友善體驗 / 快速入場");
+  optimizedPlan.push(`先把 ${destination} 的安排分成「一定要去」和「有空再去」，不要一開始就全部塞滿。`);
+  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，每天以 1 個主區域 + 1 到 2 個重點景點最合理。`);
+  optimizedPlan.push("上午排需要體力或需要預約的點，下午安排散步、購物、咖啡店或彈性空檔。");
+
+  if (spots.length > 0) {
+    optimizedPlan.push(`你現在列的景點裡，建議把同區域的點排同一天，例如：${spots.slice(0, 3).join(" / ")} 先看地理位置再決定順序。`);
+  } else {
+    optimizedPlan.push(`如果你要我先幫你起一版，建議先從 ${destination} 最經典、最順路的區域下手，不要一開始就排太多跨區移動。`);
   }
 
   const safeDayCount = Math.max(1, Math.min(dayCount || 3, 6));
   for (let i = 1; i <= safeDayCount; i++) {
-    dailyPlan.push(`Day ${i}：安排 1–2 個核心景點，避免跨區來回，下午保留用餐與休息緩衝。`);
+    if (i === 1) {
+      dailyPlan.push(`Day ${i}：抵達後只安排同區域的輕鬆行程，先熟悉動線，不要第一天就硬塞大景點。`);
+    } else if (i === safeDayCount) {
+      dailyPlan.push(`Day ${i}：安排一個主要區域 + 保留收尾與購物彈性，不要在最後一天做高風險跨區移動。`);
+    } else {
+      dailyPlan.push(`Day ${i}：上午主景點，下午附近散步 / 咖啡 / 購物，晚餐安排在同區，不要來回折返。`);
+    }
   }
 
-  const content = [
-    `這趟 ${destination} 行程不是不能玩，而是目前比較像「想去清單」，還不像真正能舒服執行的旅行版本。`,
-    `我會建議你先把節奏放慢，把最想去的點留下，把只是順便的點刪掉，整體體驗會好很多。`,
-    "",
-    "你現在最該注意的是：",
-    "• 不要一天塞太多主景點",
-    "• 同區域景點放同一天",
-    "• 熱門景點與移動時間要留緩衝",
-    "",
-    "如果你要走比較有感覺的版本，這趟行程最好至少有一餐、一次散步、一次完全不趕時間的空檔。",
-  ].join("\n");
+  const fallbackCards = bookingCandidates.slice(0, 4).map((item, index) => ({
+    title: item.place_name || item.title,
+    reason:
+      index === 0
+        ? "這個項目最適合先鎖定，能幫你把主要行程先確定下來。"
+        : "這個可以當成你行程裡的候選預約項目，等主線排好後再決定是否加入。",
+    href: item.href || "#",
+    buttonLabel: "查看方案",
+    badge: index === 0 ? "優先預約" : "候選方案",
+    sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+  }));
+
+  bookingSuggestions.push(...fallbackCards);
 
   return {
-    summary: `${destination} 這趟不是不能去，而是目前安排還不夠像真正能走的行程。建議先處理動線、節奏與預約項目，體驗會差很多。`,
+    summary: `${destination} 這趟不是不能玩，而是你現在比較像在列願望清單，還不是一份真正走起來舒服的旅行版本。先把每天主區域、節奏和該先訂的東西定下來，整體體驗會好很多。`,
     warnings,
     optimizedPlan,
     bookingSuggestions,
     dailyPlan,
-    content,
+    content: [
+      `如果我是直接幫你排這趟 ${destination}，我不會先追求去很多地方，而是先確保每一天走起來是順的。`,
+      `你現在最需要處理的不是「還能不能再多加一個景點」，而是把每天的主題和區域先固定，這樣整趟旅行才不會一直在移動。`,
+      "",
+      "我建議你的排序思路是：",
+      "1. 先定每天主要區域",
+      "2. 先鎖最值得預約的票券 / 接送 / 體驗",
+      "3. 剩下的空檔再加咖啡店、購物、散步",
+      "",
+      "真正好玩的自由行，不是排最滿，而是每天都剛剛好。",
+    ].join("\n"),
   };
 }
 
@@ -155,6 +238,7 @@ export async function POST(req: Request) {
   let spots: string[] = [];
   let companion = "";
   let style = "";
+  let bookingCandidates: BookingCandidate[] = [];
 
   try {
     const body = (await req.json()) as RequestBody;
@@ -166,85 +250,125 @@ export async function POST(req: Request) {
       : [];
     companion = cleanString(body.companion);
     style = cleanString(body.style);
+    bookingCandidates = cleanBookingCandidates(body.bookingCandidates);
 
     if (!destination) {
-      return NextResponse.json(
-        { error: "destination is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "destination is required" }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      console.error("Missing OPENAI_API_KEY in environment variables");
       return NextResponse.json(
-        buildFallbackResult({ destination, days, spots, companion, style }),
+        buildFallbackResult({
+          destination,
+          days,
+          spots,
+          companion,
+          style,
+          bookingCandidates,
+        }),
         { status: 200 }
       );
     }
 
     const client = new OpenAI({ apiKey });
 
+    const candidateText =
+      bookingCandidates.length > 0
+        ? bookingCandidates
+            .slice(0, 12)
+            .map((item, idx) => {
+              return [
+                `候選 ${idx + 1}`,
+                `title: ${item.title}`,
+                `place_name: ${item.place_name || ""}`,
+                `description: ${item.description || ""}`,
+                `category: ${item.category || ""}`,
+                `country: ${item.country || ""}`,
+                `city: ${item.city || ""}`,
+                `location: ${item.location || ""}`,
+                `href: ${item.href || ""}`,
+                `sourceLabel: ${item.sourceLabel || ""}`,
+              ].join("\n");
+            })
+            .join("\n\n")
+        : "目前沒有可直接導購的候選商品。";
+
     const systemPrompt = `
-你是一位非常厲害的自由行旅遊顧問，
-專門幫人優化行程、避免踩坑、提升旅行體驗。
+你是一位很強的自由行旅遊顧問。
+你不是客服，也不是資料朗讀器。
+你的工作是：
+1. 幫使用者判斷這個行程哪裡不合理
+2. 重新整理成真正能玩的版本
+3. 從提供的候選商品中，挑出最適合先預約的項目
 
-你的風格：
-- 像真人，而不是客服
-- 會做取捨，不是什麼都說可以
-- 會指出不合理的地方
-- 會幫使用者重新規劃
-- 會像真的在幫朋友排自由行
+風格要求：
+- 講人話，像真的懂自由行的人
+- 要有判斷、有取捨
+- 不要什麼都說可以
+- 不要空泛
+- 不能只重複「每天 1-2 個景點」
+- dailyPlan 要像真的可執行
+- content 要像資深旅遊顧問在幫朋友排
 
-你只能輸出 JSON。
+你只能輸出合法 JSON。
 你只能使用繁體中文。
-不要輸出 markdown code block，不要輸出多餘說明。
+不要輸出 markdown code block。
 `;
 
     const userPrompt = `
-幫我優化這個旅遊行程：
+請幫我做一份真的有內容的 AI 行程規劃。
 
+【使用者需求】
 地點：${destination}
 天數：${days || "未指定"}
-景點：${spots.join("、") || "幫我安排"}
+景點：${spots.join("、") || "尚未指定，請主動幫我規劃"}
 同行：${companion || "未指定"}
-風格：${style || "未指定"}
+偏好節奏：${style || "未指定"}
 
-請輸出 JSON，格式如下：
+【可直接導購 / 可直接預約的候選項目】
+${candidateText}
+
+請輸出以下 JSON 格式：
 
 {
-  "summary": "用 2 到 4 句繁體中文，直接說出這趟行程目前最大的問題、節奏感、值不值得這樣排",
+  "summary": "2到4句，直接說這趟現在最大的問題、適合怎麼玩、值不值得照原本那樣排",
   "warnings": [
-    "3 到 5 條具體避坑提醒，要真的指出哪裡會後悔"
+    "3到5條具體避坑提醒"
   ],
   "optimizedPlan": [
-    "4 到 6 條具體優化建議，要有取捨與排序邏輯"
+    "4到6條具體優化建議，要有順序與取捨"
   ],
   "dailyPlan": [
-    "Day 1：實際安排",
-    "Day 2：實際安排",
-    "Day 3：實際安排"
+    "Day 1：具體版本",
+    "Day 2：具體版本"
   ],
   "bookingSuggestions": [
-    "3 到 5 個最值得先預約的項目"
+    {
+      "title": "具體推薦項目名稱",
+      "reason": "為什麼現在該先訂這個，要跟行程有關",
+      "href": "必須從候選項目的 href 裡挑一個，不能亂編",
+      "buttonLabel": "查看方案",
+      "badge": "例如：優先預約 / 門票 / 接送 / 體驗 / 包車",
+      "sourceLabel": "可用 place_name 或 sourceLabel"
+    }
   ],
-  "content": "請用比較像真人旅遊顧問的方式，寫出完整建議。要有節奏、有判斷、有取捨，不要只是空泛列點。"
+  "content": "像資深旅遊顧問在跟朋友說話，完整講出你真正會怎麼排、怎麼刪、怎麼留白、哪些該先訂"
 }
 
 規則：
-- 不能只講「每天 1-2 個景點」這種太空泛的句子
-- 要具體說明怎麼排比較合理
-- 若使用者沒有提供景點，就主動規劃該城市最合理的初次旅行版本
-- 若行程太空，請主動補強
-- 若行程太滿，請主動刪減
-- 若適合先訂票、接送、導覽、包車，要明確提出
-- dailyPlan 一定要真的像可以拿去執行的版本
-- content 要像資深旅遊顧問在跟朋友講話，不要像機器
+- bookingSuggestions 最多 4 個
+- bookingSuggestions 的 href 只能從我提供的候選項目裡選
+- 如果候選項目不夠適合，可以少給，不要硬湊
+- 若使用者沒給景點，你要主動規劃該城市第一次去最順的版本
+- 若使用者行程太空，要主動補強
+- 若行程太滿，要主動刪減
+- dailyPlan 一定要具體，不要只有大方向
 `;
 
     const completion = await client.chat.completions.create({
       model: "gpt-4o",
-      temperature: 0.8,
+      temperature: 0.7,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
@@ -255,9 +379,15 @@ export async function POST(req: Request) {
     const text = completion.choices?.[0]?.message?.content?.trim() || "";
 
     if (!text) {
-      console.error("OpenAI returned empty content");
       return NextResponse.json(
-        buildFallbackResult({ destination, days, spots, companion, style }),
+        buildFallbackResult({
+          destination,
+          days,
+          spots,
+          companion,
+          style,
+          bookingCandidates,
+        }),
         { status: 200 }
       );
     }
@@ -266,9 +396,15 @@ export async function POST(req: Request) {
     try {
       parsed = JSON.parse(text);
     } catch {
-      console.error("OpenAI returned invalid JSON text:", text);
       return NextResponse.json(
-        buildFallbackResult({ destination, days, spots, companion, style }),
+        buildFallbackResult({
+          destination,
+          days,
+          spots,
+          companion,
+          style,
+          bookingCandidates,
+        }),
         { status: 200 }
       );
     }
@@ -276,9 +412,15 @@ export async function POST(req: Request) {
     const normalized = normalizeAIResult(parsed);
 
     if (!normalized) {
-      console.error("normalizeAIResult failed:", parsed);
       return NextResponse.json(
-        buildFallbackResult({ destination, days, spots, companion, style }),
+        buildFallbackResult({
+          destination,
+          days,
+          spots,
+          companion,
+          style,
+          bookingCandidates,
+        }),
         { status: 200 }
       );
     }
@@ -288,7 +430,14 @@ export async function POST(req: Request) {
     console.error("API /api/pit fatal error:", error);
 
     return NextResponse.json(
-      buildFallbackResult({ destination, days, spots, companion, style }),
+      buildFallbackResult({
+        destination,
+        days,
+        spots,
+        companion,
+        style,
+        bookingCandidates,
+      }),
       { status: 200 }
     );
   }
