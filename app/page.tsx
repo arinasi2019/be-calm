@@ -51,6 +51,10 @@ type BookingSuggestion = {
   buttonLabel: string;
   badge: string;
   sourceLabel?: string;
+  image?: string;
+  priceFrom?: string;
+  duration?: string;
+  tag?: string;
 };
 
 type BookingCandidate = {
@@ -64,6 +68,7 @@ type BookingCandidate = {
   location?: string | null;
   href: string;
   sourceLabel?: string | null;
+  image?: string | null;
 };
 
 type PlannerResult = {
@@ -75,6 +80,8 @@ type PlannerResult = {
   dailyPlan: string[];
   content?: string;
 };
+
+type BookingTab = "all" | "tickets" | "transfer" | "charter" | "experience";
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
@@ -106,6 +113,10 @@ function normalizeBookingSuggestions(input: unknown): BookingSuggestion[] {
       const buttonLabel = String(obj.buttonLabel ?? "").trim() || "查看方案";
       const badge = String(obj.badge ?? "").trim() || "推薦";
       const sourceLabel = String(obj.sourceLabel ?? "").trim() || undefined;
+      const image = String(obj.image ?? "").trim() || undefined;
+      const priceFrom = String(obj.priceFrom ?? "").trim() || undefined;
+      const duration = String(obj.duration ?? "").trim() || undefined;
+      const tag = String(obj.tag ?? "").trim() || undefined;
 
       if (!title || !reason || !href) return null;
 
@@ -116,6 +127,10 @@ function normalizeBookingSuggestions(input: unknown): BookingSuggestion[] {
         buttonLabel,
         badge,
         sourceLabel,
+        image,
+        priceFrom,
+        duration,
+        tag,
       };
     })
     .filter(Boolean) as BookingSuggestion[];
@@ -179,6 +194,7 @@ function buildBookingCandidates(posts: Post[]): BookingCandidate[] {
       location: post.location || null,
       href: getPostPrimaryActionLink(post),
       sourceLabel: post.place_name || post.title,
+      image: post.image_url || null,
     }));
 }
 
@@ -216,10 +232,10 @@ function buildFallbackPlannerResult(params: {
         : "目前沒有特別明顯的大雷，但還是建議先把每天主區域固定。",
       companion === "家庭親子"
         ? "親子行程不要把熱門景點、購物和長距離移動塞同一天。"
-        : "不要把所有熱門點都堆在前兩天，後面會很容易疲乏。",
+        : "不要把所有熱門點都堆在前兩天，後面會比較疲乏。",
       style.includes("輕鬆")
         ? "你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。"
-        : "如果你想看比較多點，也要先接受整體會比較趕。 ",
+        : "如果你想看比較多點，也要先接受整體節奏會比較趕。",
     ].filter(Boolean),
     strategy: [
       `這趟 ${destination} 的關鍵不是去更多地方，而是每天都順。`,
@@ -247,8 +263,12 @@ function buildFallbackPlannerResult(params: {
           : "這個適合當成後續候選預約項目。",
       href: item.href,
       buttonLabel: "查看方案",
-      badge: index === 0 ? "優先預約" : "候選方案",
+      badge: index === 0 ? "優先預約" : "體驗",
       sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+      image: item.image || undefined,
+      priceFrom: index === 0 ? "查看方案" : "待查看",
+      duration: index === 0 ? "半日 / 一日" : "依方案為準",
+      tag: index === 0 ? "AI 推薦" : "候選方案",
     })),
     content: [
       `如果我是直接幫你排 ${destination}，我不會先追求去很多地方，而是先確保每天都有節奏。`,
@@ -341,42 +361,277 @@ function BulletCards({
   );
 }
 
-function BookingCardView({ card }: { card: BookingSuggestion }) {
-  const isExternal = card.href.startsWith("http");
+function getBookingTypeLabel(badge: string): BookingTab {
+  const text = badge.toLowerCase();
 
-  const button = (
-    <span className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white">
-      {card.buttonLabel}
-    </span>
-  );
+  if (text.includes("門票")) return "tickets";
+  if (text.includes("接送")) return "transfer";
+  if (text.includes("包車")) return "charter";
+  if (text.includes("體驗")) return "experience";
+  return "all";
+}
+
+function getFallbackVisual(badge: string) {
+  const text = badge.toLowerCase();
+
+  if (text.includes("門票")) {
+    return {
+      emoji: "🎟️",
+      bg: "bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500",
+    };
+  }
+
+  if (text.includes("接送")) {
+    return {
+      emoji: "🚐",
+      bg: "bg-gradient-to-br from-sky-500 via-cyan-500 to-blue-600",
+    };
+  }
+
+  if (text.includes("包車")) {
+    return {
+      emoji: "🚘",
+      bg: "bg-gradient-to-br from-emerald-500 via-teal-500 to-green-600",
+    };
+  }
+
+  return {
+    emoji: "✨",
+    bg: "bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900",
+  };
+}
+
+function ProductVisual({
+  image,
+  badge,
+  compact = false,
+}: {
+  image?: string;
+  badge: string;
+  compact?: boolean;
+}) {
+  const fallback = getFallbackVisual(badge);
+
+  if (image) {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-[20px] ${compact ? "h-28" : "h-56"} bg-slate-100`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image}
+          alt={badge}
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/45 to-transparent p-3">
+          <span className="inline-flex rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-slate-900">
+            {badge}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-emerald-700 px-3 py-1 text-[11px] font-semibold text-white">
-          {card.badge}
+    <div
+      className={`relative overflow-hidden rounded-[20px] ${compact ? "h-28" : "h-56"} ${fallback.bg}`}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.22),transparent_40%)]" />
+      <div className="absolute left-4 top-4 text-4xl">{fallback.emoji}</div>
+      <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+        <span className="inline-flex rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-semibold backdrop-blur">
+          {badge}
         </span>
+      </div>
+    </div>
+  );
+}
+
+function AppProductCard({
+  card,
+  compact = false,
+}: {
+  card: BookingSuggestion;
+  compact?: boolean;
+}) {
+  const isExternal = card.href.startsWith("http");
+
+  const body = (
+    <div className="group rounded-[24px] border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <ProductVisual image={card.image} badge={card.badge} compact={compact} />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {card.tag ? (
+          <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold text-white">
+            {card.tag}
+          </span>
+        ) : null}
+
         {card.sourceLabel ? (
-          <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
             {card.sourceLabel}
           </span>
         ) : null}
       </div>
 
-      <div className="mt-3 text-sm font-bold text-slate-900">{card.title}</div>
-      <div className="mt-2 text-xs leading-6 text-slate-600 whitespace-pre-wrap">
+      <div className={`mt-3 font-black text-slate-900 ${compact ? "text-sm leading-6" : "text-lg leading-7"}`}>
+        {card.title}
+      </div>
+
+      <div className={`mt-2 text-slate-600 ${compact ? "text-xs leading-5 line-clamp-3" : "text-sm leading-6"}`}>
         {card.reason}
       </div>
 
-      <div className="mt-4">
-        {isExternal ? (
-          <a href={card.href} target="_blank" rel="noreferrer">
-            {button}
-          </a>
-        ) : (
-          <Link href={card.href}>{button}</Link>
-        )}
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] text-slate-400">價格</div>
+          <div className={`${compact ? "text-sm" : "text-base"} font-bold text-slate-900`}>
+            {card.priceFrom || "查看方案"}
+          </div>
+        </div>
+
+        <div className="min-w-0 text-right">
+          <div className="text-[11px] text-slate-400">時間</div>
+          <div className={`${compact ? "text-xs" : "text-sm"} font-semibold text-slate-700`}>
+            {card.duration || "依方案為準"}
+          </div>
+        </div>
       </div>
+
+      <div className="mt-4 inline-flex rounded-full bg-[linear-gradient(135deg,#0b1324_0%,#10204a_100%)] px-4 py-2 text-xs font-semibold text-white shadow-sm">
+        {card.buttonLabel}
+      </div>
+    </div>
+  );
+
+  return isExternal ? (
+    <a href={card.href} target="_blank" rel="noreferrer">
+      {body}
+    </a>
+  ) : (
+    <Link href={card.href}>{body}</Link>
+  );
+}
+
+function BookingAppPanel({
+  cards,
+}: {
+  cards: BookingSuggestion[];
+}) {
+  const [activeTab, setActiveTab] = useState<BookingTab>("all");
+
+  const filteredCards = useMemo(() => {
+    if (activeTab === "all") return cards;
+    return cards.filter((card) => getBookingTypeLabel(card.badge) === activeTab);
+  }, [cards, activeTab]);
+
+  const featuredCard = filteredCards[0] || cards[0] || null;
+  const secondaryCards =
+    filteredCards.length > 1 ? filteredCards.slice(1, 5) : cards.slice(1, 5);
+
+  const tabs: { key: BookingTab; label: string }[] = [
+    { key: "all", label: "全部" },
+    { key: "tickets", label: "門票" },
+    { key: "transfer", label: "接送" },
+    { key: "charter", label: "包車" },
+    { key: "experience", label: "體驗" },
+  ];
+
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] p-4 sm:p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div className="text-lg font-black text-slate-900">直接購買</div>
+          <div className="mt-1 text-sm text-slate-500">
+            AI 幫你挑出最值得先訂的項目，這一區會更像真正的 travel app。
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={[
+                  "rounded-full px-3 py-2 text-xs font-semibold transition",
+                  active
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                ].join(" ")}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!featuredCard ? (
+        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
+          目前還沒有對應的可預約候選項目，可以先補更多帶外部連結的旅遊商品內容。
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs text-slate-500">AI 最推薦先訂</div>
+                  <div className="mt-1 text-lg font-black text-slate-900">主打方案</div>
+                </div>
+                {featuredCard.tag ? (
+                  <span className="rounded-full bg-slate-900 px-3 py-1 text-[10px] font-semibold text-white">
+                    {featuredCard.tag}
+                  </span>
+                ) : null}
+              </div>
+
+              <AppProductCard card={featuredCard} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              {secondaryCards.length === 0 ? (
+                <div className="rounded-[22px] border border-slate-200 bg-white p-4 text-sm text-slate-500">
+                  目前這個分類下只有一個最推薦方案。
+                </div>
+              ) : (
+                secondaryCards.map((card, index) => (
+                  <AppProductCard key={`${card.title}-${index}`} card={card} compact />
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="text-xs text-slate-500">熱門方向</div>
+              <div className="mt-2 text-sm font-bold text-slate-900">先鎖主線商品</div>
+              <div className="mt-2 text-xs leading-5 text-slate-600">
+                先把最影響整趟節奏的票券、接送或包車訂下來。
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="text-xs text-slate-500">行程優先順序</div>
+              <div className="mt-2 text-sm font-bold text-slate-900">先大項，再小項</div>
+              <div className="mt-2 text-xs leading-5 text-slate-600">
+                先決定主景點與移動骨架，再補購物、散步、咖啡店。
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+              <div className="text-xs text-slate-500">未來擴充</div>
+              <div className="mt-2 text-sm font-bold text-slate-900">直接接商品頁</div>
+              <div className="mt-2 text-xs leading-5 text-slate-600">
+                之後可以接 Klook、Viator、接送、包車或自家訂購頁。
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -845,23 +1100,15 @@ export default function HomePage() {
           </SectionCard>
 
           <SectionCard
-            title="建議你先買的項目"
-            subtitle="未來這區就是你真正的轉換區，能直接接門票、接送、包車與體驗。"
+            title="直接購買區"
+            subtitle="這一區已升級成更像 App 的 booking panel。"
           >
             {!hasPlanned ? (
               <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                完成診斷後，這裡會顯示更適合你的預約方向。
-              </div>
-            ) : effectivePlanner.bookingSuggestions.length === 0 ? (
-              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                目前還沒有對應的候選預約項目，可以再補更多帶有外部連結或地點連結的旅遊內容。
+                完成診斷後，這裡會顯示 AI 挑出來最值得先訂的方案。
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {effectivePlanner.bookingSuggestions.map((card, index) => (
-                  <BookingCardView key={`${card.title}-${index}`} card={card} />
-                ))}
-              </div>
+              <BookingAppPanel cards={effectivePlanner.bookingSuggestions} />
             )}
           </SectionCard>
         </section>
@@ -920,7 +1167,7 @@ export default function HomePage() {
           </p>
 
           <p>
-            這一版已經把未來直接購買的路先鋪好，之後只要你的內容庫和商品庫更完整，這頁就可以很自然地接轉換。
+            這一版已經把未來直接購買的路先鋪好，之後只要內容庫和商品庫更完整，這頁就可以很自然地接轉換。
           </p>
         </section>
       </div>

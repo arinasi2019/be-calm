@@ -15,6 +15,7 @@ type BookingCandidate = {
   location?: string | null;
   href?: string | null;
   sourceLabel?: string | null;
+  image?: string | null;
 };
 
 type RequestBody = {
@@ -35,6 +36,10 @@ type BookingSuggestion = {
   buttonLabel: string;
   badge: string;
   sourceLabel?: string;
+  image?: string;
+  priceFrom?: string;
+  duration?: string;
+  tag?: string;
 };
 
 type AIPlanResult = {
@@ -78,6 +83,7 @@ function cleanBookingCandidates(value: unknown): BookingCandidate[] {
         location: cleanString(obj.location) || null,
         href,
         sourceLabel: cleanString(obj.sourceLabel) || null,
+        image: cleanString(obj.image) || null,
       };
     })
     .filter(Boolean) as BookingCandidate[];
@@ -97,6 +103,10 @@ function normalizeBookingSuggestions(value: unknown): BookingSuggestion[] {
       const buttonLabel = cleanString(obj.buttonLabel) || "查看方案";
       const badge = cleanString(obj.badge) || "推薦";
       const sourceLabel = cleanString(obj.sourceLabel) || undefined;
+      const image = cleanString(obj.image) || undefined;
+      const priceFrom = cleanString(obj.priceFrom) || undefined;
+      const duration = cleanString(obj.duration) || undefined;
+      const tag = cleanString(obj.tag) || undefined;
 
       if (!title || !reason || !href) return null;
 
@@ -107,6 +117,10 @@ function normalizeBookingSuggestions(value: unknown): BookingSuggestion[] {
         buttonLabel,
         badge,
         sourceLabel,
+        image,
+        priceFrom,
+        duration,
+        tag,
       };
     })
     .filter(Boolean) as BookingSuggestion[];
@@ -191,11 +205,11 @@ function buildFallbackResult(params: {
   }
 
   if (mustAvoid) {
-    warnings.push(`你自己已經明確說不想要「${mustAvoid}」，所以後續安排應該圍繞這個限制來做，不要硬湊。`);
+    warnings.push(`你自己已經明確說不想要「${mustAvoid}」，所以安排應該圍繞這個限制來做。`);
   }
 
   if (warnings.length === 0) {
-    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天的主區域和預約順序定清楚。");
+    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天主區域和預約順序定清楚。");
   }
 
   strategy.push(`這趟 ${destination} 不要追求去很多地方，而要追求每天都順。`);
@@ -236,8 +250,12 @@ function buildFallbackResult(params: {
           : "這個適合當成候選預約項目，等主線排好後再加入。",
       href: item.href || "#",
       buttonLabel: "查看方案",
-      badge: index === 0 ? "優先預約" : "候選方案",
+      badge: index === 0 ? "優先預約" : "體驗",
       sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+      image: item.image || undefined,
+      priceFrom: index === 0 ? "查看方案" : "待查看",
+      duration: index === 0 ? "半日 / 一日" : "依方案為準",
+      tag: index === 0 ? "AI 推薦" : "候選方案",
     }))
   );
 
@@ -325,6 +343,7 @@ export async function POST(req: Request) {
                 `location: ${item.location || ""}`,
                 `href: ${item.href || ""}`,
                 `sourceLabel: ${item.sourceLabel || ""}`,
+                `image: ${item.image || ""}`,
               ].join("\n")
             )
             .join("\n\n")
@@ -385,8 +404,12 @@ ${candidateText}
       "reason": "為什麼現在該先買",
       "href": "只能從候選項目裡挑",
       "buttonLabel": "查看方案",
-      "badge": "例如：優先預約 / 門票 / 接送 / 體驗 / 包車",
-      "sourceLabel": "可用 place_name 或 sourceLabel"
+      "badge": "例如：門票 / 接送 / 包車 / 體驗 / 優先預約",
+      "sourceLabel": "可用 place_name 或 sourceLabel",
+      "image": "若候選有 image 就優先帶入，沒有可留空字串",
+      "priceFrom": "用簡短字串，例如：¥3,500起 / 查看方案 / 依頁面為準",
+      "duration": "用簡短字串，例如：3小時 / 半日 / 一日 / 依方案為準",
+      "tag": "例如：AI 推薦 / 親子適合 / 先鎖主線 / 熱門"
     }
   ],
   "content": "像資深旅遊顧問在幫朋友排旅程，完整講出這趟應該怎麼玩、怎麼刪、怎麼留白、哪些該先訂"
@@ -395,6 +418,8 @@ ${candidateText}
 規則：
 - bookingSuggestions 最多 4 個
 - href 只能從我提供的候選項目裡挑
+- image 若候選有就優先沿用
+- priceFrom 與 duration 可用保守描述，不要亂編過度具體假資訊
 - 候選項目不夠適合時可以少給，不要硬湊
 - 沒有景點時要主動規劃第一次去最順的版本
 - 太空時主動補強
