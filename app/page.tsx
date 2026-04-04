@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import SiteHeader from "./components/SiteHeader";
 import { supabase } from "./lib/supabase";
@@ -53,15 +53,6 @@ type BookingSuggestion = {
   sourceLabel?: string;
 };
 
-type PlannerResult = {
-  warnings: string[];
-  optimizedPlan: string[];
-  bookingSuggestions: BookingSuggestion[];
-  dailyPlan: string[];
-  summary?: string;
-  content?: string;
-};
-
 type BookingCandidate = {
   id: number;
   title: string;
@@ -73,6 +64,16 @@ type BookingCandidate = {
   location?: string | null;
   href: string;
   sourceLabel?: string | null;
+};
+
+type PlannerResult = {
+  summary?: string;
+  warnings: string[];
+  strategy: string[];
+  optimizedPlan: string[];
+  bookingSuggestions: BookingSuggestion[];
+  dailyPlan: string[];
+  content?: string;
 };
 
 function normalizeText(value: string) {
@@ -88,9 +89,7 @@ function parseSpots(input: string) {
 
 function safeArray(input: unknown) {
   if (!Array.isArray(input)) return [];
-  return input
-    .map((item) => String(item ?? "").trim())
-    .filter(Boolean);
+  return input.map((item) => String(item ?? "").trim()).filter(Boolean);
 }
 
 function normalizeBookingSuggestions(input: unknown): BookingSuggestion[] {
@@ -127,126 +126,31 @@ function normalizeAIResult(input: unknown): PlannerResult | null {
 
   const obj = input as Record<string, unknown>;
 
-  const warnings = safeArray(obj.warnings);
-  const optimizedPlan = safeArray(obj.optimizedPlan);
-  const dailyPlan = safeArray(obj.dailyPlan);
-  const bookingSuggestions = normalizeBookingSuggestions(obj.bookingSuggestions);
-  const summary =
-    typeof obj.summary === "string" && obj.summary.trim()
-      ? obj.summary.trim()
-      : undefined;
-  const content =
-    typeof obj.content === "string" && obj.content.trim()
-      ? obj.content.trim()
-      : undefined;
+  const result: PlannerResult = {
+    summary:
+      typeof obj.summary === "string" && obj.summary.trim() ? obj.summary.trim() : undefined,
+    warnings: safeArray(obj.warnings),
+    strategy: safeArray(obj.strategy),
+    optimizedPlan: safeArray(obj.optimizedPlan),
+    bookingSuggestions: normalizeBookingSuggestions(obj.bookingSuggestions),
+    dailyPlan: safeArray(obj.dailyPlan),
+    content:
+      typeof obj.content === "string" && obj.content.trim() ? obj.content.trim() : undefined,
+  };
 
   if (
-    warnings.length === 0 &&
-    optimizedPlan.length === 0 &&
-    bookingSuggestions.length === 0 &&
-    dailyPlan.length === 0 &&
-    !summary &&
-    !content
+    !result.summary &&
+    result.warnings.length === 0 &&
+    result.strategy.length === 0 &&
+    result.optimizedPlan.length === 0 &&
+    result.bookingSuggestions.length === 0 &&
+    result.dailyPlan.length === 0 &&
+    !result.content
   ) {
     return null;
   }
 
-  return {
-    warnings,
-    optimizedPlan,
-    bookingSuggestions,
-    dailyPlan,
-    summary,
-    content,
-  };
-}
-
-function buildPlannerFallbackResult(params: {
-  destination: string;
-  days: string;
-  spots: string[];
-  companion: CompanionType;
-  style: string;
-  bookingCandidates: BookingCandidate[];
-}): PlannerResult {
-  const warnings: string[] = [];
-  const optimizedPlan: string[] = [];
-  const dailyPlan: string[] = [];
-  const bookingSuggestions: BookingSuggestion[] = [];
-
-  const dayCount = Number(params.days || 0);
-  const destination = params.destination.trim();
-
-  if (!destination) {
-    return {
-      warnings: [],
-      optimizedPlan: [],
-      bookingSuggestions: [],
-      dailyPlan: [],
-      summary: "",
-      content: "",
-    };
-  }
-
-  if (params.spots.length > 0 && dayCount > 0 && params.spots.length > dayCount * 3) {
-    warnings.push("你現在列的點偏多，實際走起來很容易太趕。");
-  }
-
-  if (params.companion === "家庭親子") {
-    warnings.push("親子行程不要把熱門景點、購物與長距離移動塞同一天。");
-  }
-
-  if (params.companion === "長輩同行") {
-    warnings.push("長輩同行時，真正累的通常不是景點，而是轉車和反覆移動。");
-  }
-
-  if (params.style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
-  }
-
-  if (warnings.length === 0) {
-    warnings.push("目前沒有明顯大雷，但建議先確認每天主區域與轉場節奏。");
-  }
-
-  optimizedPlan.push(`先把 ${destination} 的景點分成「一定要去」和「有空再去」。`);
-  optimizedPlan.push(`以 ${params.days || "這次"} 的天數看，每天以 1 個主區域最舒服。`);
-  optimizedPlan.push("早上排最重要的點，下午留給附近散步、咖啡、購物或休息。");
-
-  const safeDayCount = Math.max(1, Math.min(dayCount || 3, 6));
-  for (let i = 1; i <= safeDayCount; i++) {
-    dailyPlan.push(`Day ${i}：先排一個主區域與一個重點景點，避免跨區折返。`);
-  }
-
-  bookingSuggestions.push(
-    ...params.bookingCandidates.slice(0, 4).map((item, index) => ({
-      title: item.place_name || item.title,
-      reason:
-        index === 0
-          ? "這個最適合先鎖定，能先把主線行程定下來。"
-          : "這個可作為你這趟行程的候選預約項目。",
-      href: item.href,
-      buttonLabel: "查看方案",
-      badge: index === 0 ? "優先預約" : "候選方案",
-      sourceLabel: item.sourceLabel || item.city || item.country || undefined,
-    }))
-  );
-
-  return {
-    warnings,
-    optimizedPlan,
-    bookingSuggestions,
-    dailyPlan,
-    summary: `${destination} 這趟目前比較像願望清單，還不是最舒服的執行版本。先把每天主區域和該先訂的項目定下來，整體體驗會更好。`,
-    content: [
-      `這趟 ${destination}，我不建議一開始就追求去很多地方。`,
-      `真正好玩的自由行，是每天都有重點，但又不會一直在趕路。`,
-      "",
-      "你應該先做的事：",
-      "1. 先定每天主區域",
-      "2. 先鎖最值得預約的門票 / 接送 / 體驗",
-      "3. 剩下再補散步、購物和咖啡店",
-    ].join("\n"),
-  };
+  return result;
 }
 
 function getPostPrimaryActionLink(post: Post) {
@@ -278,6 +182,205 @@ function buildBookingCandidates(posts: Post[]): BookingCandidate[] {
     }));
 }
 
+function buildFallbackPlannerResult(params: {
+  destination: string;
+  days: string;
+  spots: string[];
+  companion: CompanionType;
+  style: string;
+  budget: string;
+  mustAvoid: string;
+  bookingCandidates: BookingCandidate[];
+}): PlannerResult {
+  const { destination, days, spots, companion, style, bookingCandidates } = params;
+
+  if (!destination.trim()) {
+    return {
+      summary: "",
+      warnings: [],
+      strategy: [],
+      optimizedPlan: [],
+      bookingSuggestions: [],
+      dailyPlan: [],
+      content: "",
+    };
+  }
+
+  const dayCount = Math.max(1, Math.min(Number(days || 3), 6));
+
+  return {
+    summary: `${destination} 這趟目前比較像想去清單，還不是一份真正有節奏的旅行版本。先把主區域、節奏和優先預約項目定下來，整體會順很多。`,
+    warnings: [
+      spots.length > dayCount * 3
+        ? "你列的景點偏多，實際走起來很容易因為移動和排隊失控。"
+        : "目前沒有特別明顯的大雷，但還是建議先把每天主區域固定。",
+      companion === "家庭親子"
+        ? "親子行程不要把熱門景點、購物和長距離移動塞同一天。"
+        : "不要把所有熱門點都堆在前兩天，後面會很容易疲乏。",
+      style.includes("輕鬆")
+        ? "你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。"
+        : "如果你想看比較多點，也要先接受整體會比較趕。 ",
+    ].filter(Boolean),
+    strategy: [
+      `這趟 ${destination} 的關鍵不是去更多地方，而是每天都順。`,
+      "先定每天主區域，再補咖啡、購物、散步。",
+      "先鎖熱門票券和移動骨架，再決定細節。",
+    ],
+    optimizedPlan: [
+      `先把 ${destination} 的景點分成「一定要去」和「有空再去」。`,
+      `以 ${days || "這次"} 的天數來看，每天以 1 個主區域 + 1 到 2 個核心點最合理。`,
+      "上午排最重要的點，下午排同區散步、購物或休息。",
+      "不要晚餐後再跨區，晚上應該收在同一區比較舒服。",
+    ],
+    dailyPlan: Array.from({ length: dayCount }).map((_, i) =>
+      i === 0
+        ? `Day ${i + 1}：抵達後先安排同區域輕鬆行程，不要第一天就排最硬的景點。`
+        : i === dayCount - 1
+        ? `Day ${i + 1}：安排一個主要區域＋收尾購物或散步，避免最後一天跨區來回。`
+        : `Day ${i + 1}：上午主景點，下午同區散步 / 咖啡 / 購物，晚餐不要再換區。`
+    ),
+    bookingSuggestions: bookingCandidates.slice(0, 4).map((item, index) => ({
+      title: item.place_name || item.title,
+      reason:
+        index === 0
+          ? "這個最適合先鎖定，能把你整趟行程主線先固定下來。"
+          : "這個適合當成後續候選預約項目。",
+      href: item.href,
+      buttonLabel: "查看方案",
+      badge: index === 0 ? "優先預約" : "候選方案",
+      sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+    })),
+    content: [
+      `如果我是直接幫你排 ${destination}，我不會先追求去很多地方，而是先確保每天都有節奏。`,
+      `你真正需要的不是更多景點，而是更好的取捨。`,
+      "",
+      "我會先做三件事：",
+      "1. 固定每天主區域",
+      "2. 先鎖票券 / 接送 / 體驗",
+      "3. 剩下再補購物、散步和咖啡店",
+    ].join("\n"),
+  };
+}
+
+function Pill({
+  children,
+  active = false,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium",
+        active
+          ? "bg-white text-slate-900"
+          : "bg-white/10 text-white/85 ring-1 ring-white/10",
+      ].join(" ")}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-lg font-black text-slate-900">{title}</div>
+      {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function BulletCards({
+  items,
+  tone,
+  numbered = false,
+  emptyText,
+}: {
+  items: string[];
+  tone: "amber" | "sky" | "emerald";
+  numbered?: boolean;
+  emptyText: string;
+}) {
+  const toneClass =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-950"
+      : tone === "sky"
+      ? "border-sky-200 bg-sky-50 text-sky-950"
+      : "border-emerald-200 bg-emerald-50 text-emerald-950";
+
+  if (!items.length) {
+    return (
+      <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
+        {emptyText}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((item, index) => (
+        <div
+          key={`${item}-${index}`}
+          className={`rounded-2xl border px-4 py-4 text-sm leading-7 ${toneClass}`}
+        >
+          {numbered ? `${index + 1}. ${item}` : item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BookingCardView({ card }: { card: BookingSuggestion }) {
+  const isExternal = card.href.startsWith("http");
+
+  const button = (
+    <span className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white">
+      {card.buttonLabel}
+    </span>
+  );
+
+  return (
+    <div className="rounded-[24px] border border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-emerald-700 px-3 py-1 text-[11px] font-semibold text-white">
+          {card.badge}
+        </span>
+        {card.sourceLabel ? (
+          <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-slate-200">
+            {card.sourceLabel}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 text-sm font-bold text-slate-900">{card.title}</div>
+      <div className="mt-2 text-xs leading-6 text-slate-600 whitespace-pre-wrap">
+        {card.reason}
+      </div>
+
+      <div className="mt-4">
+        {isExternal ? (
+          <a href={card.href} target="_blank" rel="noreferrer">
+            {button}
+          </a>
+        ) : (
+          <Link href={card.href}>{button}</Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TravelPitfallCard({ post }: { post: Post }) {
   const locationText = [post.country, post.city, post.location].filter(Boolean).join(" · ");
   const actionHref = getPostPrimaryActionLink(post);
@@ -291,26 +394,24 @@ function TravelPitfallCard({ post }: { post: Post }) {
           <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white">
             旅遊避坑
           </span>
-          {post.country && (
+          {post.country ? (
             <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
               {post.country}
             </span>
-          )}
+          ) : null}
         </div>
 
         <div className="mt-3 text-lg font-black leading-7 text-slate-900">
           {post.place_name || post.title}
         </div>
 
-        {post.place_name && post.title && post.place_name !== post.title && (
+        {post.place_name && post.title && post.place_name !== post.title ? (
           <div className="mt-1 text-sm text-slate-600">{post.title}</div>
-        )}
+        ) : null}
 
-        {locationText && <div className="mt-2 text-xs text-slate-500">{locationText}</div>}
+        {locationText ? <div className="mt-2 text-xs text-slate-500">{locationText}</div> : null}
 
-        <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">
-          {post.content}
-        </div>
+        <div className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">{post.content}</div>
       </Link>
 
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -340,129 +441,6 @@ function TravelPitfallCard({ post }: { post: Post }) {
   );
 }
 
-function SummaryCard({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-lg font-black text-slate-900">{title}</div>
-      <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-700 whitespace-pre-wrap">
-        {body}
-      </div>
-    </div>
-  );
-}
-
-function ResultListCard({
-  title,
-  subtitle,
-  items,
-  tone = "amber",
-  numbered = false,
-  emptyText,
-}: {
-  title: string;
-  subtitle: string;
-  items: string[];
-  tone?: "amber" | "sky" | "rose" | "emerald";
-  numbered?: boolean;
-  emptyText: string;
-}) {
-  const toneClass =
-    tone === "sky"
-      ? "border-sky-200 bg-sky-50 text-sky-900"
-      : tone === "rose"
-      ? "border-rose-200 bg-rose-50 text-rose-900"
-      : tone === "emerald"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-      : "border-amber-200 bg-amber-50 text-amber-900";
-
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-lg font-black text-slate-900">{title}</div>
-      <div className="mt-1 text-sm text-slate-500">{subtitle}</div>
-
-      {items.length === 0 ? (
-        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-          {emptyText}
-        </div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          {items.map((item, index) => (
-            <div
-              key={`${item}-${index}`}
-              className={`rounded-2xl border px-4 py-4 text-sm leading-7 ${toneClass}`}
-            >
-              {numbered ? `${index + 1}. ${item}` : item}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BookingCardView({ card }: { card: BookingSuggestion }) {
-  const isExternal = card.href.startsWith("http");
-
-  return (
-    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-      <div className="flex items-center gap-2">
-        <span className="rounded-full bg-emerald-700 px-3 py-1 text-[11px] font-semibold text-white">
-          {card.badge}
-        </span>
-        {card.sourceLabel && (
-          <span className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-600">
-            {card.sourceLabel}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-3 text-sm font-bold text-emerald-900">{card.title}</div>
-      <div className="mt-2 text-xs leading-6 text-emerald-800 whitespace-pre-wrap">
-        {card.reason}
-      </div>
-
-      {isExternal ? (
-        <a
-          href={card.href}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-        >
-          {card.buttonLabel}
-        </a>
-      ) : (
-        <Link
-          href={card.href}
-          className="mt-4 inline-flex rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-        >
-          {card.buttonLabel}
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function LongformAdviceCard({ content }: { content: string }) {
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-lg font-black text-slate-900">AI 顧問版完整建議</div>
-      <div className="mt-1 text-sm text-slate-500">
-        這裡會像真人旅遊顧問一樣，把節奏、取捨、預約順序講清楚。
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-8 text-slate-700 whitespace-pre-wrap">
-        {content}
-      </div>
-    </div>
-  );
-}
-
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
 
@@ -471,6 +449,8 @@ export default function HomePage() {
   const [spotsInput, setSpotsInput] = useState("");
   const [companion, setCompanion] = useState<CompanionType>("情侶");
   const [style, setStyle] = useState("輕鬆一點");
+  const [budget, setBudget] = useState("");
+  const [mustAvoid, setMustAvoid] = useState("");
   const [hasPlanned, setHasPlanned] = useState(false);
 
   const [aiResult, setAiResult] = useState<PlannerResult | null>(null);
@@ -545,11 +525,9 @@ export default function HomePage() {
         let score = 0;
 
         if (dest && haystack.includes(dest)) score += 4;
-
         for (const keyword of spotKeywords) {
           if (keyword && haystack.includes(keyword)) score += 2;
         }
-
         if (post.external_url) score += 1;
         if (post.google_maps_url) score += 1;
 
@@ -560,31 +538,31 @@ export default function HomePage() {
       .slice(0, 8)
       .map((item) => item.post);
 
-    return scored.length > 0 ? scored : posts.slice(0, 8);
+    return scored.length ? scored : posts.slice(0, 8);
   }, [posts, destination, parsedSpots]);
 
-  const bookingCandidates = useMemo(() => {
-    return buildBookingCandidates(relatedPosts);
-  }, [relatedPosts]);
+  const bookingCandidates = useMemo(() => buildBookingCandidates(relatedPosts), [relatedPosts]);
 
-  const fallbackPlannerResult = useMemo(
+  const fallbackPlanner = useMemo(
     () =>
-      buildPlannerFallbackResult({
+      buildFallbackPlannerResult({
         destination,
         days,
         spots: parsedSpots,
         companion,
         style,
+        budget,
+        mustAvoid,
         bookingCandidates,
       }),
-    [destination, days, parsedSpots, companion, style, bookingCandidates]
+    [destination, days, parsedSpots, companion, style, budget, mustAvoid, bookingCandidates]
   );
 
-  const effectivePlanner = aiResult || fallbackPlannerResult;
+  const effectivePlanner = aiResult || fallbackPlanner;
 
   async function handlePlanNow() {
     if (!destination.trim()) {
-      alert("請先輸入你要去的目的地");
+      alert("請先輸入目的地");
       return;
     }
 
@@ -605,6 +583,8 @@ export default function HomePage() {
           spots: parsedSpots,
           companion,
           style,
+          budget,
+          mustAvoid,
           bookingCandidates,
         }),
       });
@@ -612,7 +592,6 @@ export default function HomePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        console.error("API /api/pit failed:", data);
         setPlannerError("AI 暫時沒有成功回覆，先顯示系統預估版本。");
         setAiResult(null);
         return;
@@ -621,7 +600,6 @@ export default function HomePage() {
       const normalized = normalizeAIResult(data);
 
       if (!normalized) {
-        console.error("normalizeAIResult failed:", data);
         setPlannerError("AI 回覆格式不完整，先顯示系統預估版本。");
         setAiResult(null);
         return;
@@ -629,7 +607,7 @@ export default function HomePage() {
 
       setAiResult(normalized);
     } catch (error) {
-      console.error("AI fetch error:", error);
+      console.error(error);
       setPlannerError("AI 連線失敗，先顯示系統預估版本。");
       setAiResult(null);
     } finally {
@@ -638,51 +616,65 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7fb] pb-16 text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-4 sm:px-5 sm:py-6">
+    <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
         <SiteHeader />
 
-        <section className="overflow-hidden rounded-[34px] bg-gradient-to-br from-[#0f172a] via-[#111827] to-[#1e293b] text-white shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
-          <div className="grid gap-6 px-5 py-6 sm:px-7 sm:py-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="overflow-hidden rounded-[36px] bg-[radial-gradient(circle_at_top_left,_rgba(82,133,255,0.22),_transparent_32%),linear-gradient(135deg,#081226_0%,#0b1730_38%,#0f1f42_100%)] text-white shadow-[0_24px_70px_rgba(15,23,42,0.28)]">
+          <div className="grid gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="max-w-2xl">
               <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
-                AI 旅遊避坑 × 行程優化 × 導購
+                AI Travel Concierge
               </div>
 
-              <h1 className="mt-4 text-3xl font-black leading-tight sm:text-5xl">
-                把你的旅行計畫丟進來，
+              <h1 className="mt-5 text-4xl font-black leading-tight sm:text-6xl">
+                不只是幫你排行程，
                 <br className="hidden sm:block" />
-                先避坑，再出發。
+                而是幫你先避坑，再決定該買什麼。
               </h1>
 
-              <p className="mt-4 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
-                不只是看負評，而是先檢查你的旅程安排有沒有太趕、太雷、太容易後悔。
-                AI 會像真人旅遊顧問一樣幫你重排，並直接挑出適合先預約的方案。
+              <p className="mt-5 max-w-xl text-sm leading-7 text-slate-300 sm:text-base">
+                BeCalm Travel 會先檢查你的旅程安排是不是太趕、太散、太容易後悔，
+                再像真的旅遊顧問一樣幫你重整成更能玩的版本，最後把該先預約的東西挑出來。
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  行程避坑
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  動線優化
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  每日規劃
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">
-                  直接導購
-                </span>
+                <Pill>行程診斷</Pill>
+                <Pill>顧問式規劃</Pill>
+                <Pill>避坑提醒</Pill>
+                <Pill active>未來可直接購買</Pill>
+              </div>
+
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
+                  <div className="text-xs text-slate-300">先看風險</div>
+                  <div className="mt-2 text-sm font-semibold">哪裡最容易後悔</div>
+                </div>
+                <div className="rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
+                  <div className="text-xs text-slate-300">再排版本</div>
+                  <div className="mt-2 text-sm font-semibold">真的能玩的 Day by Day</div>
+                </div>
+                <div className="rounded-2xl bg-white/8 p-4 ring-1 ring-white/10">
+                  <div className="text-xs text-slate-300">最後導購</div>
+                  <div className="mt-2 text-sm font-semibold">把該先訂的先鎖下來</div>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/95 p-4 text-slate-900 shadow-2xl backdrop-blur">
-              <div className="text-sm font-bold text-slate-900">AI 行程診斷</div>
-              <div className="mt-1 text-xs leading-6 text-slate-500">
-                輸入你的旅行安排後，AI 會幫你抓節奏、動線、停留時間與預約優先順序。
+            <div className="rounded-[30px] border border-white/10 bg-white/95 p-4 text-slate-900 shadow-2xl backdrop-blur sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-bold text-slate-900">AI 旅遊專員</div>
+                  <div className="mt-1 text-xs leading-6 text-slate-500">
+                    輸入需求後，AI 會先給你判斷，再幫你把行程排得更像真的能出發。
+                  </div>
+                </div>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white">
+                  Beta
+                </span>
               </div>
 
-              <div className="mt-4 space-y-4">
+              <div className="mt-5 space-y-4">
                 <div>
                   <label className="mb-2 block text-sm font-medium">你要去哪裡？</label>
                   <input
@@ -690,7 +682,7 @@ export default function HomePage() {
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
                     placeholder="例如：東京 / 京都 / 大阪 / 首爾"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                   />
                 </div>
 
@@ -702,7 +694,7 @@ export default function HomePage() {
                       min={1}
                       value={days}
                       onChange={(e) => setDays(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                     />
                   </div>
 
@@ -711,7 +703,7 @@ export default function HomePage() {
                     <select
                       value={companion}
                       onChange={(e) => setCompanion(e.target.value as CompanionType)}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                     >
                       <option>一個人</option>
                       <option>情侶</option>
@@ -729,21 +721,43 @@ export default function HomePage() {
                     onChange={(e) => setSpotsInput(e.target.value)}
                     rows={4}
                     placeholder="例如：淺草、上野、晴空塔 / 沒有安排，幫我規劃"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                   />
-                  <div className="mt-2 text-xs text-slate-400">
-                    可用逗號、頓號或換行分隔。
+                  <div className="mt-2 text-xs text-slate-400">可用逗號、頓號或換行分隔。</div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">你偏好的節奏</label>
+                    <input
+                      type="text"
+                      value={style}
+                      onChange={(e) => setStyle(e.target.value)}
+                      placeholder="例如：輕鬆一點 / 不想太累"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">預算方向</label>
+                    <input
+                      type="text"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      placeholder="例如：中等預算 / 想省一點"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium">你偏好的節奏</label>
+                  <label className="mb-2 block text-sm font-medium">你最不想踩的坑</label>
                   <input
                     type="text"
-                    value={style}
-                    onChange={(e) => setStyle(e.target.value)}
-                    placeholder="例如：輕鬆一點 / 想多看幾個景點 / 不想太累"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+                    value={mustAvoid}
+                    onChange={(e) => setMustAvoid(e.target.value)}
+                    placeholder="例如：不想太早起 / 不想一直排隊 / 不想一直換飯店"
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                   />
                 </div>
 
@@ -751,95 +765,118 @@ export default function HomePage() {
                   type="button"
                   onClick={handlePlanNow}
                   disabled={loadingAI}
-                  className="w-full rounded-full bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:opacity-60"
+                  className="w-full rounded-full bg-[linear-gradient(135deg,#0b1324_0%,#10204a_100%)] px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-60"
                 >
-                  {loadingAI ? "AI 規劃中..." : "開始診斷我的行程"}
+                  {loadingAI ? "AI 規劃中..." : "開始讓 AI 幫我規劃"}
                 </button>
               </div>
             </div>
           </div>
         </section>
 
-        {plannerError && (
+        {plannerError ? (
           <section className="mt-6">
-            <div className="rounded-[28px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-sm">
+            <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-sm">
               {plannerError}
             </div>
           </section>
-        )}
+        ) : null}
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-          <SummaryCard
-            title="AI 行程總結"
-            body={
-              !hasPlanned
-                ? "先輸入目的地、天數、同行類型與想去的地方，這裡會先給你整體判斷。"
+        <section className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <SectionCard
+            title="AI 總評"
+            subtitle="不是機器摘要，而是先給你一句真正有判斷的結論。"
+          >
+            <div className="rounded-[24px] bg-slate-50 px-4 py-5 text-sm leading-8 text-slate-700 whitespace-pre-wrap">
+              {!hasPlanned
+                ? "輸入你的旅遊需求後，這裡會先給你一句真正有判斷的總評。"
                 : effectivePlanner.summary ||
-                  `${destination || "這趟旅程"} 已完成初步診斷，建議先看避坑提醒，再往下看優化版與可直接預約的方案。`
-            }
-          />
+                  "目前還沒有 AI 總評，但下方仍可先看系統產生的規劃版本。"}
+            </div>
+          </SectionCard>
 
-          <ResultListCard
-            title="AI 避坑提醒"
-            subtitle="先看你的安排哪裡最容易出問題。"
-            items={hasPlanned ? effectivePlanner.warnings : []}
-            tone="amber"
-            emptyText="完成上方輸入後，這裡會顯示 AI 的避坑提醒。"
-          />
+          <SectionCard
+            title="最先該注意的風險"
+            subtitle="先看哪裡最容易踩雷，再談怎麼玩。"
+          >
+            <BulletCards
+              items={hasPlanned ? effectivePlanner.warnings : []}
+              tone="amber"
+              emptyText="完成上方輸入後，這裡會先顯示 AI 的避坑提醒。"
+            />
+          </SectionCard>
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-          <ResultListCard
-            title="優化後行程方向"
-            subtitle="不是叫你全部照原本的去，而是幫你重排成更順的版本。"
-            items={hasPlanned ? effectivePlanner.optimizedPlan : []}
-            tone="sky"
-            numbered
-            emptyText="完成上方輸入後，這裡會產出更像真人顧問的優化方向。"
-          />
+        <section className="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <SectionCard
+            title="這趟應該怎麼思考"
+            subtitle="先不是排細節，而是先抓對整體策略。"
+          >
+            <BulletCards
+              items={hasPlanned ? effectivePlanner.strategy : []}
+              tone="sky"
+              emptyText="完成診斷後，這裡會先出現整體策略。"
+            />
+          </SectionCard>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-lg font-black text-slate-900">建議你先訂的方案</div>
-            <div className="mt-1 text-sm text-slate-500">
-              這裡不是固定模板，而是 AI 根據你的行程與候選商品挑出來的。
-            </div>
+          <SectionCard
+            title="優化後版本"
+            subtitle="幫你把旅程從願望清單，重整成更能玩的版本。"
+          >
+            <BulletCards
+              items={hasPlanned ? effectivePlanner.optimizedPlan : []}
+              tone="sky"
+              numbered
+              emptyText="完成診斷後，這裡會出現更具體的優化方向。"
+            />
+          </SectionCard>
+        </section>
 
+        <section className="mt-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <SectionCard
+            title="AI 每日行程建議"
+            subtitle="這裡會更像真人旅遊顧問幫你排的 Day by Day。"
+          >
+            <BulletCards
+              items={hasPlanned ? effectivePlanner.dailyPlan : []}
+              tone="emerald"
+              emptyText="完成診斷後，這裡會出現每日行程建議。"
+            />
+          </SectionCard>
+
+          <SectionCard
+            title="建議你先買的項目"
+            subtitle="未來這區就是你真正的轉換區，能直接接門票、接送、包車與體驗。"
+          >
             {!hasPlanned ? (
-              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                完成行程診斷後，這裡會顯示更具體的預約建議。
+              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                完成診斷後，這裡會顯示更適合你的預約方向。
               </div>
             ) : effectivePlanner.bookingSuggestions.length === 0 ? (
-              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
-                目前還沒有對應的可預約候選項目，可以先補更多目的地相關內容或商品。
+              <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                目前還沒有對應的候選預約項目，可以再補更多帶有外部連結或地點連結的旅遊內容。
               </div>
             ) : (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {effectivePlanner.bookingSuggestions.map((card, index) => (
                   <BookingCardView key={`${card.title}-${index}`} card={card} />
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
         </section>
 
         <section className="mt-6">
-          <ResultListCard
-            title="AI 每日行程建議"
-            subtitle="這裡會更像 ChatGPT 幫你真的排出可執行的 Day by Day。"
-            items={hasPlanned ? effectivePlanner.dailyPlan : []}
-            tone="emerald"
-            emptyText="完成診斷後，這裡會出現每日行程版本。"
-          />
-        </section>
-
-        <section className="mt-6">
-          <LongformAdviceCard
-            content={
-              !hasPlanned
-                ? "等你輸入目的地、天數與偏好後，這裡會出現更像真人旅遊顧問的完整建議。"
-                : effectivePlanner.content || "目前還沒有更完整的顧問版建議內容。"
-            }
-          />
+          <SectionCard
+            title="AI 顧問版完整建議"
+            subtitle="這一區會像 ChatGPT 一樣，直接把判斷和取捨講清楚。"
+          >
+            <div className="rounded-[24px] bg-slate-50 px-4 py-5 text-sm leading-8 text-slate-700 whitespace-pre-wrap">
+              {!hasPlanned
+                ? "等你輸入目的地、天數、偏好和限制後，這裡會出現更像真人旅遊顧問的完整建議。"
+                : effectivePlanner.content || "目前還沒有完整建議內容。"}
+            </div>
+          </SectionCard>
         </section>
 
         <section className="mt-6 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -870,19 +907,20 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-5xl px-1 pb-8 pt-10 text-sm leading-relaxed text-slate-600">
+        <section className="mx-auto max-w-5xl px-1 pb-12 pt-10 text-sm leading-relaxed text-slate-600">
           <h2 className="mb-3 text-lg font-bold text-slate-900">關於 BeCalm Travel</h2>
 
           <p className="mb-3">
-            BeCalm Travel 不是單純的旅遊負評站，而是把真實踩坑內容和 AI 行程優化結合起來的旅行決策工具。
+            BeCalm Travel 不是單純的旅遊負評站，而是把真實踩坑內容和 AI
+            旅遊專員規劃結合起來的旅行決策工具。
           </p>
 
           <p className="mb-3">
-            你可以先輸入自己的安排，看哪些景點排法太趕、哪些動線很容易後悔、哪些東西應該先訂，再根據真實內容調整成更合理的版本。
+            你可以先輸入自己的旅遊需求，看哪些景點排法太趕、哪些動線很容易後悔、哪些項目該先買，再把整趟旅行整理成更合理的版本。
           </p>
 
           <p>
-            這一版的重點，是讓 AI 不只會說建議，還能直接挑出可以導購、可以預約的方案。
+            這一版已經把未來直接購買的路先鋪好，之後只要你的內容庫和商品庫更完整，這頁就可以很自然地接轉換。
           </p>
         </section>
       </div>

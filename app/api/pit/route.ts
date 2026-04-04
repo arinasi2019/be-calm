@@ -23,6 +23,8 @@ type RequestBody = {
   spots?: string[];
   companion?: string;
   style?: string;
+  budget?: string;
+  mustAvoid?: string;
   bookingCandidates?: BookingCandidate[];
 };
 
@@ -38,6 +40,7 @@ type BookingSuggestion = {
 type AIPlanResult = {
   summary: string;
   warnings: string[];
+  strategy: string[];
   optimizedPlan: string[];
   bookingSuggestions: BookingSuggestion[];
   dailyPlan: string[];
@@ -60,8 +63,8 @@ function cleanBookingCandidates(value: unknown): BookingCandidate[] {
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const obj = item as Record<string, unknown>;
-
       const href = cleanString(obj.href);
+
       if (!href) return null;
 
       return {
@@ -117,6 +120,7 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
   const result: AIPlanResult = {
     summary: cleanString(obj.summary),
     warnings: cleanArray(obj.warnings),
+    strategy: cleanArray(obj.strategy),
     optimizedPlan: cleanArray(obj.optimizedPlan),
     bookingSuggestions: normalizeBookingSuggestions(obj.bookingSuggestions),
     dailyPlan: cleanArray(obj.dailyPlan),
@@ -126,6 +130,7 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
   if (
     !result.summary &&
     result.warnings.length === 0 &&
+    result.strategy.length === 0 &&
     result.optimizedPlan.length === 0 &&
     result.bookingSuggestions.length === 0 &&
     result.dailyPlan.length === 0 &&
@@ -143,89 +148,114 @@ function buildFallbackResult(params: {
   spots: string[];
   companion: string;
   style: string;
+  budget: string;
+  mustAvoid: string;
   bookingCandidates: BookingCandidate[];
 }): AIPlanResult {
-  const { destination, days, spots, companion, style, bookingCandidates } = params;
+  const {
+    destination,
+    days,
+    spots,
+    companion,
+    style,
+    budget,
+    mustAvoid,
+    bookingCandidates,
+  } = params;
 
   const dayCount = Number(days || 0);
   const warnings: string[] = [];
+  const strategy: string[] = [];
   const optimizedPlan: string[] = [];
   const dailyPlan: string[] = [];
   const bookingSuggestions: BookingSuggestion[] = [];
 
   if (spots.length > 0 && dayCount > 0 && spots.length > dayCount * 3) {
-    warnings.push("你現在想去的點偏多，真實走起來很容易因為排隊、吃飯、轉場而整體失控。");
+    warnings.push("你目前想去的點偏多，最大的風險不是玩不到，而是整趟一直在趕路。");
   }
 
   if (!spots.length) {
-    warnings.push("你目前還沒有列景點，代表最容易踩的坑不是太滿，而是到當地才臨時決定，最後浪費很多移動時間。");
-  }
-
-  if (style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆節奏，就不適合一天塞太多『順路再去一下』的安排。");
+    warnings.push("你目前沒有列景點，最容易踩的坑會變成到當地才臨時想，最後花很多時間在移動和決定。");
   }
 
   if (companion.includes("家庭")) {
-    warnings.push("親子行程不要把熱門景點、購物、長距離移動排在同一天，小朋友通常不是卡在體力，就是卡在吃飯與休息。");
+    warnings.push("親子行程最怕把熱門景點、購物和跨區移動塞在同一天，實際上很容易崩。");
   }
 
   if (companion.includes("長輩")) {
-    warnings.push("有長輩同行時，真正會累的不是景點本身，而是轉車、找路、反覆上下交通工具。");
+    warnings.push("長輩同行的痛點通常不是景點本身，而是換車、找路、來回折返。");
+  }
+
+  if (style.includes("輕鬆")) {
+    warnings.push("你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
+  }
+
+  if (mustAvoid) {
+    warnings.push(`你自己已經明確說不想要「${mustAvoid}」，所以後續安排應該圍繞這個限制來做，不要硬湊。`);
   }
 
   if (warnings.length === 0) {
-    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天的主題區域排清楚，避免來回折返。");
+    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天的主區域和預約順序定清楚。");
   }
 
-  optimizedPlan.push(`先把 ${destination} 的安排分成「一定要去」和「有空再去」，不要一開始就全部塞滿。`);
-  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，每天以 1 個主區域 + 1 到 2 個重點景點最合理。`);
-  optimizedPlan.push("上午排需要體力或需要預約的點，下午安排散步、購物、咖啡店或彈性空檔。");
+  strategy.push(`這趟 ${destination} 不要追求去很多地方，而要追求每天都順。`);
+  strategy.push("先定每天主區域，再決定要不要補購物、咖啡店或夜景。");
+  strategy.push("真正該先鎖的不是所有景點，而是熱門門票、接送和移動骨架。");
+
+  optimizedPlan.push(`先把 ${destination} 的安排拆成「一定要」和「有空再去」，不要一開始就全部塞滿。`);
+  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，每天以 1 個主區域 + 1 到 2 個核心重點最合理。`);
+  optimizedPlan.push("上午排最難排隊或最需要體力的點，下午改成散步、購物或咖啡。");
+
+  if (budget) {
+    optimizedPlan.push(`因為你有提到預算方向「${budget}」，所以不建議把高單價體驗全塞在同一兩天。`);
+  }
 
   if (spots.length > 0) {
-    optimizedPlan.push(`你現在列的景點裡，建議把同區域的點排同一天，例如：${spots.slice(0, 3).join(" / ")} 先看地理位置再決定順序。`);
+    optimizedPlan.push(`你現在列的點，建議先照地理位置分天，例如：${spots.slice(0, 3).join(" / ")}。`);
   } else {
-    optimizedPlan.push(`如果你要我先幫你起一版，建議先從 ${destination} 最經典、最順路的區域下手，不要一開始就排太多跨區移動。`);
+    optimizedPlan.push(`如果你要我先幫你起一版，建議從 ${destination} 最經典、最順路的區域先排。`);
   }
 
   const safeDayCount = Math.max(1, Math.min(dayCount || 3, 6));
   for (let i = 1; i <= safeDayCount; i++) {
     if (i === 1) {
-      dailyPlan.push(`Day ${i}：抵達後只安排同區域的輕鬆行程，先熟悉動線，不要第一天就硬塞大景點。`);
+      dailyPlan.push(`Day ${i}：抵達日只安排同區域輕鬆行程，先熟悉環境，不要第一天就排硬仗。`);
     } else if (i === safeDayCount) {
-      dailyPlan.push(`Day ${i}：安排一個主要區域 + 保留收尾與購物彈性，不要在最後一天做高風險跨區移動。`);
+      dailyPlan.push(`Day ${i}：安排一個主要區域＋收尾購物或散步，避免最後一天做高風險跨區移動。`);
     } else {
-      dailyPlan.push(`Day ${i}：上午主景點，下午附近散步 / 咖啡 / 購物，晚餐安排在同區，不要來回折返。`);
+      dailyPlan.push(`Day ${i}：上午主景點，下午同區散步 / 咖啡 / 購物，晚餐不要再跨區。`);
     }
   }
 
-  const fallbackCards = bookingCandidates.slice(0, 4).map((item, index) => ({
-    title: item.place_name || item.title,
-    reason:
-      index === 0
-        ? "這個項目最適合先鎖定，能幫你把主要行程先確定下來。"
-        : "這個可以當成你行程裡的候選預約項目，等主線排好後再決定是否加入。",
-    href: item.href || "#",
-    buttonLabel: "查看方案",
-    badge: index === 0 ? "優先預約" : "候選方案",
-    sourceLabel: item.sourceLabel || item.city || item.country || undefined,
-  }));
-
-  bookingSuggestions.push(...fallbackCards);
+  bookingSuggestions.push(
+    ...bookingCandidates.slice(0, 4).map((item, index) => ({
+      title: item.place_name || item.title,
+      reason:
+        index === 0
+          ? "這個最適合先鎖定，能先把你整趟行程的主線定下來。"
+          : "這個適合當成候選預約項目，等主線排好後再加入。",
+      href: item.href || "#",
+      buttonLabel: "查看方案",
+      badge: index === 0 ? "優先預約" : "候選方案",
+      sourceLabel: item.sourceLabel || item.city || item.country || undefined,
+    }))
+  );
 
   return {
-    summary: `${destination} 這趟不是不能玩，而是你現在比較像在列願望清單，還不是一份真正走起來舒服的旅行版本。先把每天主區域、節奏和該先訂的東西定下來，整體體驗會好很多。`,
+    summary: `${destination} 這趟不是不能玩，而是你目前比較像在列願望清單，還不是一份真正走起來舒服的版本。先把每天主區域、節奏和該先訂的東西定下來，整體體驗會差很多。`,
     warnings,
+    strategy,
     optimizedPlan,
     bookingSuggestions,
     dailyPlan,
     content: [
-      `如果我是直接幫你排這趟 ${destination}，我不會先追求去很多地方，而是先確保每一天走起來是順的。`,
-      `你現在最需要處理的不是「還能不能再多加一個景點」，而是把每天的主題和區域先固定，這樣整趟旅行才不會一直在移動。`,
+      `如果我是直接幫你排這趟 ${destination}，我不會先追求去很多地方，而是先確保每天都順。`,
+      `你現在最需要處理的不是「還能不能再多加一個景點」，而是把每天主題區域先固定。`,
       "",
-      "我建議你的排序思路是：",
-      "1. 先定每天主要區域",
-      "2. 先鎖最值得預約的票券 / 接送 / 體驗",
-      "3. 剩下的空檔再加咖啡店、購物、散步",
+      "我會建議你這樣想：",
+      "1. 先定每天主區域",
+      "2. 先鎖最值得預約的門票 / 接送 / 體驗",
+      "3. 剩下的空檔再加散步、購物、咖啡店",
       "",
       "真正好玩的自由行，不是排最滿，而是每天都剛剛好。",
     ].join("\n"),
@@ -238,6 +268,8 @@ export async function POST(req: Request) {
   let spots: string[] = [];
   let companion = "";
   let style = "";
+  let budget = "";
+  let mustAvoid = "";
   let bookingCandidates: BookingCandidate[] = [];
 
   try {
@@ -250,6 +282,8 @@ export async function POST(req: Request) {
       : [];
     companion = cleanString(body.companion);
     style = cleanString(body.style);
+    budget = cleanString(body.budget);
+    mustAvoid = cleanString(body.mustAvoid);
     bookingCandidates = cleanBookingCandidates(body.bookingCandidates);
 
     if (!destination) {
@@ -265,6 +299,8 @@ export async function POST(req: Request) {
           spots,
           companion,
           style,
+          budget,
+          mustAvoid,
           bookingCandidates,
         }),
         { status: 200 }
@@ -277,8 +313,8 @@ export async function POST(req: Request) {
       bookingCandidates.length > 0
         ? bookingCandidates
             .slice(0, 12)
-            .map((item, idx) => {
-              return [
+            .map((item, idx) =>
+              [
                 `候選 ${idx + 1}`,
                 `title: ${item.title}`,
                 `place_name: ${item.place_name || ""}`,
@@ -289,27 +325,28 @@ export async function POST(req: Request) {
                 `location: ${item.location || ""}`,
                 `href: ${item.href || ""}`,
                 `sourceLabel: ${item.sourceLabel || ""}`,
-              ].join("\n");
-            })
+              ].join("\n")
+            )
             .join("\n\n")
-        : "目前沒有可直接導購的候選商品。";
+        : "目前沒有可直接導購的候選項目。";
 
     const systemPrompt = `
-你是一位很強的自由行旅遊顧問。
-你不是客服，也不是資料朗讀器。
-你的工作是：
-1. 幫使用者判斷這個行程哪裡不合理
-2. 重新整理成真正能玩的版本
-3. 從提供的候選商品中，挑出最適合先預約的項目
+你是一位高階 AI 旅遊專員。
+你不是客服，也不是只會列點的摘要機器。
+
+你的任務：
+1. 判斷這個行程哪裡不合理
+2. 重整成真正能玩的版本
+3. 幫使用者抓出節奏、取捨、預約順序
+4. 從候選商品中挑出最適合先買的項目
 
 風格要求：
-- 講人話，像真的懂自由行的人
-- 要有判斷、有取捨
+- 像資深自由行顧問
+- 有判斷、有取捨
 - 不要什麼都說可以
 - 不要空泛
-- 不能只重複「每天 1-2 個景點」
-- dailyPlan 要像真的可執行
-- content 要像資深旅遊顧問在幫朋友排
+- dailyPlan 要真的可執行
+- content 要像在跟朋友講，而不是機器
 
 你只能輸出合法 JSON。
 你只能使用繁體中文。
@@ -317,53 +354,52 @@ export async function POST(req: Request) {
 `;
 
     const userPrompt = `
-請幫我做一份真的有內容的 AI 行程規劃。
+請幫我做一份有質感的 AI 旅遊專員規劃。
 
 【使用者需求】
 地點：${destination}
 天數：${days || "未指定"}
-景點：${spots.join("、") || "尚未指定，請主動幫我規劃"}
+景點：${spots.join("、") || "尚未指定，請主動規劃"}
 同行：${companion || "未指定"}
 偏好節奏：${style || "未指定"}
+預算方向：${budget || "未指定"}
+不想踩的坑：${mustAvoid || "未指定"}
 
 【可直接導購 / 可直接預約的候選項目】
 ${candidateText}
 
-請輸出以下 JSON 格式：
+請輸出 JSON：
 
 {
-  "summary": "2到4句，直接說這趟現在最大的問題、適合怎麼玩、值不值得照原本那樣排",
-  "warnings": [
-    "3到5條具體避坑提醒"
-  ],
-  "optimizedPlan": [
-    "4到6條具體優化建議，要有順序與取捨"
-  ],
+  "summary": "2到4句，像顧問直接講重點",
+  "warnings": ["3到5條具體避坑提醒"],
+  "strategy": ["3到5條整體策略判斷"],
+  "optimizedPlan": ["4到6條具體優化方向"],
   "dailyPlan": [
-    "Day 1：具體版本",
-    "Day 2：具體版本"
+    "Day 1：具體安排",
+    "Day 2：具體安排"
   ],
   "bookingSuggestions": [
     {
       "title": "具體推薦項目名稱",
-      "reason": "為什麼現在該先訂這個，要跟行程有關",
-      "href": "必須從候選項目的 href 裡挑一個，不能亂編",
+      "reason": "為什麼現在該先買",
+      "href": "只能從候選項目裡挑",
       "buttonLabel": "查看方案",
       "badge": "例如：優先預約 / 門票 / 接送 / 體驗 / 包車",
       "sourceLabel": "可用 place_name 或 sourceLabel"
     }
   ],
-  "content": "像資深旅遊顧問在跟朋友說話，完整講出你真正會怎麼排、怎麼刪、怎麼留白、哪些該先訂"
+  "content": "像資深旅遊顧問在幫朋友排旅程，完整講出這趟應該怎麼玩、怎麼刪、怎麼留白、哪些該先訂"
 }
 
 規則：
 - bookingSuggestions 最多 4 個
-- bookingSuggestions 的 href 只能從我提供的候選項目裡選
-- 如果候選項目不夠適合，可以少給，不要硬湊
-- 若使用者沒給景點，你要主動規劃該城市第一次去最順的版本
-- 若使用者行程太空，要主動補強
-- 若行程太滿，要主動刪減
-- dailyPlan 一定要具體，不要只有大方向
+- href 只能從我提供的候選項目裡挑
+- 候選項目不夠適合時可以少給，不要硬湊
+- 沒有景點時要主動規劃第一次去最順的版本
+- 太空時主動補強
+- 太滿時主動刪減
+- dailyPlan 不能空泛
 `;
 
     const completion = await client.chat.completions.create({
@@ -386,6 +422,8 @@ ${candidateText}
           spots,
           companion,
           style,
+          budget,
+          mustAvoid,
           bookingCandidates,
         }),
         { status: 200 }
@@ -403,6 +441,8 @@ ${candidateText}
           spots,
           companion,
           style,
+          budget,
+          mustAvoid,
           bookingCandidates,
         }),
         { status: 200 }
@@ -419,6 +459,8 @@ ${candidateText}
           spots,
           companion,
           style,
+          budget,
+          mustAvoid,
           bookingCandidates,
         }),
         { status: 200 }
@@ -436,6 +478,8 @@ ${candidateText}
         spots,
         companion,
         style,
+        budget,
+        mustAvoid,
         bookingCandidates,
       }),
       { status: 200 }
