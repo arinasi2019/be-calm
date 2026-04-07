@@ -95,13 +95,18 @@ type PlannerResult = {
   content?: string;
 };
 
+type SearchChip = {
+  label: string;
+  value: string;
+};
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
 
 function parseSpots(input: string) {
   return input
-    .split(/[\n,，、]/)
+    .split(/[\n,，、/]/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -187,6 +192,38 @@ function getPostPrimaryActionLink(post: Post) {
   return `/post/${post.id}`;
 }
 
+function getPostTitle(post: Post) {
+  return post.place_name || post.title;
+}
+
+function getPostSubtitle(post: Post) {
+  if (post.place_name && post.title && post.place_name !== post.title) {
+    return post.title;
+  }
+  return "";
+}
+
+function getPostLocation(post: Post) {
+  return [post.country, post.city, post.location].filter(Boolean).join(" · ");
+}
+
+function getPostSearchText(post: Post) {
+  return [
+    post.title,
+    post.place_name,
+    post.category,
+    post.country,
+    post.city,
+    post.location,
+    post.content,
+    post.incident_type,
+    ...(post.hashtags || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 function buildBookingCandidates(posts: Post[]): BookingCandidate[] {
   return posts
     .filter((post) => Boolean(post.external_url || post.google_maps_url || post.booking_url))
@@ -267,7 +304,53 @@ function buildFallbackPlannerResult(params: {
   };
 }
 
-function HeroPill({ children }: { children: React.ReactNode }) {
+function getMatchedPosts(posts: Post[], query: string) {
+  const keywords = parseSpots(query).map(normalizeText);
+
+  if (keywords.length === 0) return posts.slice(0, 9);
+
+  return posts
+    .map((post) => {
+      const haystack = getPostSearchText(post);
+
+      let score = 0;
+
+      for (const keyword of keywords) {
+        if (!keyword) continue;
+
+        if (haystack.includes(keyword)) score += 3;
+        if (post.title?.toLowerCase().includes(keyword)) score += 2;
+        if ((post.place_name || "").toLowerCase().includes(keyword)) score += 2;
+        if ((post.city || "").toLowerCase().includes(keyword)) score += 1;
+        if ((post.country || "").toLowerCase().includes(keyword)) score += 1;
+      }
+
+      if (post.is_featured) score += 1;
+
+      return { post, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 12)
+    .map((item) => item.post);
+}
+
+function getCategoryTone(category: string) {
+  switch (category) {
+    case "商品":
+      return "bg-emerald-950 text-white";
+    case "旅遊":
+      return "bg-sky-950 text-white";
+    case "服務":
+      return "bg-violet-950 text-white";
+    case "人物/事件":
+      return "bg-rose-700 text-white";
+    default:
+      return "bg-slate-900 text-white";
+  }
+}
+
+function HeroBadge({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/10">
       {children}
@@ -275,69 +358,60 @@ function HeroPill({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SimplePlanCard({
-  title,
-  items,
-  tone = "slate",
+function SearchChipButton({
+  chip,
+  onClick,
 }: {
-  title: string;
-  items: string[];
-  tone?: "slate" | "amber";
+  chip: SearchChip;
+  onClick: (value: string) => void;
 }) {
-  const cardTone =
-    tone === "amber"
-      ? "border-amber-200 bg-amber-50 text-amber-950"
-      : "border-slate-200 bg-slate-50 text-slate-800";
-
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-2xl font-black text-slate-900">{title}</div>
-
-      {items.length === 0 ? (
-        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-400">—</div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          {items.map((item, index) => (
-            <div
-              key={`${item}-${index}`}
-              className={`rounded-2xl border px-4 py-4 text-sm leading-7 ${cardTone}`}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={() => onClick(chip.value)}
+      className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-medium text-white ring-1 ring-white/10 transition hover:bg-white/20"
+    >
+      {chip.label}
+    </button>
   );
 }
 
-function SummaryCard({
+function ResultHeader({
   title,
-  value,
+  subtitle,
+  action,
 }: {
   title: string;
-  value?: string;
+  subtitle?: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="text-2xl font-black text-slate-900">{title}</div>
-      <div className="mt-4 rounded-2xl bg-slate-50 px-5 py-5 text-base leading-8 text-slate-700 whitespace-pre-wrap">
-        {value || "—"}
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <div className="text-3xl font-black text-slate-900">{title}</div>
+        {subtitle ? <div className="mt-2 text-sm text-slate-500">{subtitle}</div> : null}
       </div>
+      {action ? <div>{action}</div> : null}
     </div>
   );
 }
 
 function RelatedPostCard({ post }: { post: Post }) {
-  const locationText = [post.country, post.city, post.location].filter(Boolean).join(" · ");
+  const title = getPostTitle(post);
+  const subtitle = getPostSubtitle(post);
+  const locationText = getPostLocation(post);
 
   return (
     <Link
       href={`/post/${post.id}`}
-      className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group block rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white">
+        <span
+          className={`rounded-full px-3 py-1 text-[11px] font-semibold ${getCategoryTone(
+            post.category
+          )}`}
+        >
           {post.category}
         </span>
 
@@ -349,14 +423,16 @@ function RelatedPostCard({ post }: { post: Post }) {
       </div>
 
       <div className="mt-4 line-clamp-2 text-[22px] font-black leading-8 text-slate-900">
-        {post.place_name || post.title}
+        {title}
       </div>
 
-      {post.place_name && post.title && post.place_name !== post.title ? (
-        <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{post.title}</div>
+      {subtitle ? (
+        <div className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{subtitle}</div>
       ) : null}
 
-      {locationText ? <div className="mt-3 text-sm text-slate-500">{locationText}</div> : null}
+      {locationText ? (
+        <div className="mt-3 text-sm font-medium text-slate-500">{locationText}</div>
+      ) : null}
 
       <div className="mt-4 line-clamp-4 text-sm leading-7 text-slate-700">{post.content}</div>
     </Link>
@@ -398,6 +474,78 @@ function SuggestionCard({ card }: { card: BookingSuggestion }) {
   );
 }
 
+function SearchContextCard({
+  destination,
+  days,
+  spotsInput,
+  companion,
+  style,
+}: {
+  destination: string;
+  days: string;
+  spotsInput: string;
+  companion: CompanionType;
+  style: string;
+}) {
+  const items = [
+    destination ? `需求：${destination}` : "",
+    days ? `天數：${days}` : "",
+    spotsInput ? `想去：${spotsInput}` : "",
+    companion ? `同行：${companion}` : "",
+    style ? `節奏：${style}` : "",
+  ].filter(Boolean);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span
+            key={item}
+            className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompactPlanCard({
+  dailyPlan,
+  summary,
+}: {
+  dailyPlan: string[];
+  summary?: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-2xl font-black text-slate-900">快速整理</div>
+
+      {summary ? (
+        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
+          {summary}
+        </div>
+      ) : null}
+
+      {dailyPlan.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {dailyPlan.map((item, index) => (
+            <div
+              key={`${item}-${index}`}
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
 
@@ -406,6 +554,10 @@ export default function HomePage() {
   const [spotsInput, setSpotsInput] = useState("");
   const [companion, setCompanion] = useState<CompanionType>("情侶");
   const [style, setStyle] = useState("輕鬆一點");
+
+  const [query, setQuery] = useState("");
+  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [hasPlanned, setHasPlanned] = useState(false);
   const [aiResult, setAiResult] = useState<PlannerResult | null>(null);
@@ -453,70 +605,49 @@ export default function HomePage() {
 
   const parsedSpots = useMemo(() => parseSpots(spotsInput), [spotsInput]);
 
+  const activeQuery = submittedQuery.trim() || destination.trim() || query.trim();
+
   const relatedPosts = useMemo(() => {
-    const dest = normalizeText(destination);
-    const spotKeywords = parsedSpots.map(normalizeText);
-
-    if (!dest && spotKeywords.length === 0) {
-      return posts.slice(0, 6);
-    }
-
-    const scored = posts
-      .map((post) => {
-        const haystack = [
-          post.title,
-          post.place_name,
-          post.country,
-          post.city,
-          post.location,
-          post.content,
-          ...(post.hashtags || []),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        let score = 0;
-
-        if (dest && haystack.includes(dest)) score += 4;
-
-        for (const keyword of spotKeywords) {
-          if (keyword && haystack.includes(keyword)) score += 2;
-        }
-
-        return { post, score };
-      })
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map((item) => item.post);
-
-    return scored.length ? scored : posts.slice(0, 6);
-  }, [posts, destination, parsedSpots]);
+    const baseFromSearch = getMatchedPosts(posts, activeQuery);
+    return baseFromSearch.length > 0 ? baseFromSearch : posts.slice(0, 6);
+  }, [posts, activeQuery]);
 
   const bookingCandidates = useMemo(() => buildBookingCandidates(relatedPosts), [relatedPosts]);
 
   const fallbackPlanner = useMemo(
     () =>
       buildFallbackPlannerResult({
-        destination,
+        destination: destination || query,
         days,
         spots: parsedSpots,
         companion,
         style,
         bookingCandidates,
       }),
-    [destination, days, parsedSpots, companion, style, bookingCandidates]
+    [destination, query, days, parsedSpots, companion, style, bookingCandidates]
   );
 
   const effectivePlanner = aiResult || fallbackPlanner;
+  const latestPosts = useMemo(() => posts.slice(0, 24), [posts]);
+
+  const chips: SearchChip[] = [
+    { label: "東京 3 天不想排隊", value: "東京 3 天不想排隊" },
+    { label: "大阪美食", value: "大阪美食" },
+    { label: "想買運動相機不想踩雷", value: "想買運動相機不想踩雷" },
+    { label: "親子輕鬆", value: "親子輕鬆" },
+    { label: "不要觀光店", value: "不要觀光店" },
+  ];
 
   async function handlePlanNow() {
-    if (!destination.trim()) {
-      alert("請先輸入目的地");
+    const finalDestination = destination.trim() || query.trim();
+
+    if (!finalDestination) {
+      alert("請先輸入需求");
       return;
     }
 
+    setSubmittedQuery(finalDestination);
+    setHasSearched(true);
     setHasPlanned(true);
     setLoadingAI(true);
     setAiResult(null);
@@ -528,9 +659,9 @@ export default function HomePage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          destination,
+          destination: finalDestination,
           days,
-          spots: parsedSpots,
+          spots: parsedSpots.length > 0 ? parsedSpots : parseSpots(finalDestination),
           companion,
           style,
           bookingCandidates,
@@ -553,7 +684,21 @@ export default function HomePage() {
     }
   }
 
-  const latestPosts = posts.slice(0, 24);
+  function handleSearchSubmit() {
+    const finalQuery = query.trim() || destination.trim();
+
+    if (!finalQuery) return;
+
+    setSubmittedQuery(finalQuery);
+    setHasSearched(true);
+  }
+
+  function handleChipClick(value: string) {
+    setQuery(value);
+    setDestination(value);
+    setSubmittedQuery(value);
+    setHasSearched(true);
+  }
 
   return (
     <main className="min-h-screen bg-[#f5f7fb] text-slate-900">
@@ -561,138 +706,131 @@ export default function HomePage() {
         <SiteHeader />
 
         <section className="overflow-hidden rounded-[40px] bg-[radial-gradient(circle_at_top_left,_rgba(82,133,255,0.22),_transparent_32%),linear-gradient(135deg,#081226_0%,#0b1730_40%,#0f1f42_100%)] text-white shadow-[0_24px_70px_rgba(15,23,42,0.28)]">
-          <div className="grid gap-8 px-6 py-7 sm:px-8 sm:py-9 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="max-w-2xl">
+          <div className="px-6 py-7 sm:px-8 sm:py-9">
+            <div className="mx-auto max-w-5xl">
               <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
-                Real Reviews First
+                BeCalm
               </div>
 
-              <h1 className="mt-5 text-5xl font-black leading-[1.08] sm:text-7xl">
-                先看別人
+              <h1 className="mt-5 text-4xl font-black leading-[1.08] sm:text-6xl lg:text-7xl">
+                先輸入你的需求，
                 <br className="hidden sm:block" />
-                怎麼踩雷。
+                再看相關避坑內容。
               </h1>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                <HeroPill>真實貼文</HeroPill>
-                <HeroPill>簡單規劃</HeroPill>
-                <HeroPill>避坑內容</HeroPill>
-              </div>
-            </div>
-
-            <div className="rounded-[32px] border border-white/10 bg-white/95 p-5 text-slate-900 shadow-2xl backdrop-blur">
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="目的地 / 主題"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
-                />
-
-                <div className="grid gap-4 sm:grid-cols-2">
+              <div className="mt-8 rounded-[32px] bg-white p-3 shadow-2xl">
+                <div className="rounded-[24px] border border-slate-200 bg-white px-4 py-3">
                   <input
-                    type="number"
-                    min={1}
-                    value={days}
-                    onChange={(e) => setDays(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
+                    type="text"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      setDestination(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSearchSubmit();
+                      }
+                    }}
+                    placeholder="例如：東京 3 天不想排隊 / 想買運動相機不想踩雷"
+                    className="w-full border-none bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-lg"
                   />
-
-                  <select
-                    value={companion}
-                    onChange={(e) => setCompanion(e.target.value as CompanionType)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
-                  >
-                    <option>一個人</option>
-                    <option>情侶</option>
-                    <option>朋友</option>
-                    <option>家庭親子</option>
-                    <option>長輩同行</option>
-                  </select>
                 </div>
 
-                <textarea
-                  value={spotsInput}
-                  onChange={(e) => setSpotsInput(e.target.value)}
-                  rows={4}
-                  placeholder="想去哪些地方"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
-                />
+                <div className="mt-3 flex flex-wrap gap-2 px-1">
+                  {chips.map((chip) => (
+                    <SearchChipButton key={chip.label} chip={chip} onClick={handleChipClick} />
+                  ))}
+                </div>
 
-                <input
-                  type="text"
-                  value={style}
-                  onChange={(e) => setStyle(e.target.value)}
-                  placeholder="偏好節奏"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
-                />
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <button
+                    type="button"
+                    onClick={handleSearchSubmit}
+                    disabled={!(query.trim() || destination.trim())}
+                    className="rounded-full bg-slate-100 px-6 py-3.5 text-sm font-bold text-slate-900 transition hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    先看避坑
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handlePlanNow}
-                  disabled={loadingAI || !destination.trim()}
-                  className="w-full rounded-full bg-[linear-gradient(135deg,#0b1324_0%,#10204a_100%)] px-6 py-3 text-sm font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-60"
-                >
-                  {loadingAI ? "整理中..." : "開始整理"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handlePlanNow}
+                    disabled={loadingAI || !(query.trim() || destination.trim())}
+                    className="rounded-full bg-[linear-gradient(135deg,#0b1324_0%,#10204a_100%)] px-6 py-3.5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 disabled:opacity-50"
+                  >
+                    {loadingAI ? "整理中..." : "開始整理"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {destination.trim() ? (
-          <section className="mt-6 rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div className="text-3xl font-black text-slate-900">相關避坑</div>
+        {(hasSearched || destination.trim() || submittedQuery.trim()) && (
+          <section className="mt-6">
+            <SearchContextCard
+              destination={destination || submittedQuery}
+              days={days}
+              spotsInput={spotsInput}
+              companion={companion}
+              style={style}
+            />
+          </section>
+        )}
 
-              <Link
-                href="/write"
-                className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-              >
-                ＋ 分享避坑
-              </Link>
-            </div>
+        {(hasSearched || destination.trim() || submittedQuery.trim()) && (
+          <section className="mt-6 rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+            <ResultHeader
+              title="相關避坑"
+              subtitle={submittedQuery || destination || undefined}
+              action={
+                <Link
+                  href="/write"
+                  className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                >
+                  ＋ 分享避坑
+                </Link>
+              }
+            />
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {relatedPosts.length === 0 ? (
                 <div className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  沒有相關貼文
+                  找不到相關貼文
                 </div>
               ) : (
                 relatedPosts.map((post) => <RelatedPostCard key={post.id} post={post} />)
               )}
             </div>
           </section>
-        ) : null}
+        )}
 
-        {hasPlanned ? (
+        {hasPlanned && (
           <section className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
-            <SimplePlanCard title="簡單規劃" items={effectivePlanner.dailyPlan} />
-            <SummaryCard title="總評" value={effectivePlanner.summary || effectivePlanner.content} />
-
-            {effectivePlanner.warnings.length > 0 ? (
-              <div className="xl:col-span-2">
-                <SimplePlanCard title="注意" items={effectivePlanner.warnings} tone="amber" />
-              </div>
-            ) : null}
+            <CompactPlanCard
+              dailyPlan={effectivePlanner.dailyPlan}
+              summary={effectivePlanner.summary}
+            />
 
             {effectivePlanner.bookingSuggestions.length > 0 ? (
-              <div className="xl:col-span-2 rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-5 text-3xl font-black text-slate-900">建議先看</div>
+              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="text-2xl font-black text-slate-900">可先看</div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {effectivePlanner.bookingSuggestions.map((card, index) => (
+                <div className="mt-4 grid gap-4">
+                  {effectivePlanner.bookingSuggestions.slice(0, 3).map((card, index) => (
                     <SuggestionCard key={`${card.title}-${index}`} card={card} />
                   ))}
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <CompactPlanCard dailyPlan={effectivePlanner.warnings} />
+            )}
           </section>
-        ) : null}
+        )}
 
         <section className="mt-8">
-          <div className="mb-4 text-3xl font-black text-slate-900">最新貼文</div>
+          <ResultHeader title="最新避坑" />
 
           {latestPosts.length === 0 ? (
             <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
