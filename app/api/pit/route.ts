@@ -1,19 +1,18 @@
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 type BookingCandidate = {
-  id: number | string;
-  title: string;
+  id?: number;
+  title?: string;
   place_name?: string | null;
   description?: string | null;
   category?: string | null;
   country?: string | null;
   city?: string | null;
   location?: string | null;
-  href?: string | null;
+  href?: string;
   sourceLabel?: string | null;
   image?: string | null;
 };
@@ -43,13 +42,13 @@ type BookingSuggestion = {
 };
 
 type AIPlanResult = {
-  summary: string;
+  summary?: string;
   warnings: string[];
   strategy: string[];
   optimizedPlan: string[];
   bookingSuggestions: BookingSuggestion[];
   dailyPlan: string[];
-  content: string;
+  content?: string;
 };
 
 function cleanString(value: unknown) {
@@ -59,34 +58,6 @@ function cleanString(value: unknown) {
 function cleanArray(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => cleanString(item)).filter(Boolean);
-}
-
-function cleanBookingCandidates(value: unknown): BookingCandidate[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const obj = item as Record<string, unknown>;
-      const href = cleanString(obj.href);
-
-      if (!href) return null;
-
-      return {
-        id: cleanString(obj.id),
-        title: cleanString(obj.title),
-        place_name: cleanString(obj.place_name) || null,
-        description: cleanString(obj.description) || null,
-        category: cleanString(obj.category) || null,
-        country: cleanString(obj.country) || null,
-        city: cleanString(obj.city) || null,
-        location: cleanString(obj.location) || null,
-        href,
-        sourceLabel: cleanString(obj.sourceLabel) || null,
-        image: cleanString(obj.image) || null,
-      };
-    })
-    .filter(Boolean) as BookingCandidate[];
 }
 
 function normalizeBookingSuggestions(value: unknown): BookingSuggestion[] {
@@ -100,7 +71,7 @@ function normalizeBookingSuggestions(value: unknown): BookingSuggestion[] {
       const title = cleanString(obj.title);
       const reason = cleanString(obj.reason);
       const href = cleanString(obj.href);
-      const buttonLabel = cleanString(obj.buttonLabel) || "查看方案";
+      const buttonLabel = cleanString(obj.buttonLabel) || "查看";
       const badge = cleanString(obj.badge) || "推薦";
       const sourceLabel = cleanString(obj.sourceLabel) || undefined;
       const image = cleanString(obj.image) || undefined;
@@ -132,13 +103,13 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
   const obj = input as Record<string, unknown>;
 
   const result: AIPlanResult = {
-    summary: cleanString(obj.summary),
+    summary: cleanString(obj.summary) || undefined,
     warnings: cleanArray(obj.warnings),
     strategy: cleanArray(obj.strategy),
     optimizedPlan: cleanArray(obj.optimizedPlan),
     bookingSuggestions: normalizeBookingSuggestions(obj.bookingSuggestions),
     dailyPlan: cleanArray(obj.dailyPlan),
-    content: cleanString(obj.content),
+    content: cleanString(obj.content) || undefined,
   };
 
   if (
@@ -156,6 +127,28 @@ function normalizeAIResult(input: unknown): AIPlanResult | null {
   return result;
 }
 
+function buildFallbackBookingSuggestions(candidates: BookingCandidate[]): BookingSuggestion[] {
+  return candidates.slice(0, 4).map((item, index) => ({
+    title: cleanString(item.place_name) || cleanString(item.title) || `候選方案 ${index + 1}`,
+    reason:
+      index === 0
+        ? "這個最值得先看，因為它最可能影響整趟行程主線。"
+        : "這個可以當成後續候選方案。",
+    href: cleanString(item.href) || "/",
+    buttonLabel: "查看",
+    badge: index === 0 ? "優先" : "候選",
+    sourceLabel:
+      cleanString(item.sourceLabel) ||
+      cleanString(item.city) ||
+      cleanString(item.country) ||
+      undefined,
+    image: cleanString(item.image) || undefined,
+    priceFrom: "查看方案",
+    duration: "依方案為準",
+    tag: index === 0 ? "AI 建議" : "參考",
+  }));
+}
+
 function buildFallbackResult(params: {
   destination: string;
   days: string;
@@ -166,149 +159,96 @@ function buildFallbackResult(params: {
   mustAvoid: string;
   bookingCandidates: BookingCandidate[];
 }): AIPlanResult {
-  const {
-    destination,
-    days,
-    spots,
-    companion,
-    style,
-    budget,
-    mustAvoid,
-    bookingCandidates,
-  } = params;
+  const { destination, days, spots, companion, style, mustAvoid, bookingCandidates } = params;
 
-  const dayCount = Number(days || 0);
+  const dayCount = Math.max(1, Math.min(Number(days || 3), 7));
   const warnings: string[] = [];
   const strategy: string[] = [];
   const optimizedPlan: string[] = [];
   const dailyPlan: string[] = [];
-  const bookingSuggestions: BookingSuggestion[] = [];
 
-  if (spots.length > 0 && dayCount > 0 && spots.length > dayCount * 3) {
-    warnings.push("你目前想去的點偏多，最大的風險不是玩不到，而是整趟一直在趕路。");
+  if (spots.length > 0 && spots.length > dayCount * 3) {
+    warnings.push("你排的景點偏多，這趟行程很容易因為移動與排隊時間而失控。");
   }
 
-  if (!spots.length) {
-    warnings.push("你目前沒有列景點，最容易踩的坑會變成到當地才臨時想，最後花很多時間在移動和決定。");
-  }
-
-  if (companion.includes("家庭")) {
-    warnings.push("親子行程最怕把熱門景點、購物和跨區移動塞在同一天，實際上很容易崩。");
+  if (spots.some((spot) => /迪士尼|disney/i.test(spot)) && companion.includes("家庭")) {
+    warnings.push("親子行程不要把熱門樂園和太多跨區移動塞同一天。");
   }
 
   if (companion.includes("長輩")) {
-    warnings.push("長輩同行的痛點通常不是景點本身，而是換車、找路、來回折返。");
+    warnings.push("有長輩同行時，建議保留更多休息和交通緩衝。");
   }
 
   if (style.includes("輕鬆")) {
-    warnings.push("你偏好輕鬆型節奏，就不適合一天塞太多『順便去一下』的點。");
+    warnings.push("你偏好輕鬆行程，就不適合一天塞太多『順便去一下』的點。");
   }
 
   if (mustAvoid) {
-    warnings.push(`你自己已經明確說不想要「${mustAvoid}」，所以安排應該圍繞這個限制來做。`);
+    warnings.push(`既然你最不想踩的是「${mustAvoid}」，那整體安排就不應該往太滿、太散的方向走。`);
   }
 
   if (warnings.length === 0) {
-    warnings.push("目前沒有超明顯的大雷，但還是建議先把每天主區域和預約順序定清楚。");
+    warnings.push("目前沒有非常明顯的大雷，但還是建議先固定每天主區域與熱門預約項目。");
   }
 
-  strategy.push(`這趟 ${destination} 不要追求去很多地方，而要追求每天都順。`);
-  strategy.push("先定每天主區域，再決定要不要補購物、咖啡店或夜景。");
-  strategy.push("真正該先鎖的不是所有景點，而是熱門門票、接送和移動骨架。");
+  strategy.push(`這趟 ${destination} 的關鍵不是去更多地方，而是每天都順。`);
+  strategy.push("先定每天主區域，再補咖啡、購物、散步和餐廳。");
+  strategy.push("先鎖熱門票券 / 接送 / 一日遊，再決定小行程。");
 
-  optimizedPlan.push(`先把 ${destination} 的安排拆成「一定要」和「有空再去」，不要一開始就全部塞滿。`);
-  optimizedPlan.push(`以 ${days || "這次"} 的天數來看，每天以 1 個主區域 + 1 到 2 個核心重點最合理。`);
-  optimizedPlan.push("上午排最難排隊或最需要體力的點，下午改成散步、購物或咖啡。");
+  optimizedPlan.push(`先把 ${destination} 的景點分成「一定要去」和「有空再去」。`);
+  optimizedPlan.push(`以 ${dayCount} 天來看，每天 1 個主區域 + 1 到 2 個核心點最合理。`);
+  optimizedPlan.push("上午排最重要的點，下午排同區散步、購物或休息。");
+  optimizedPlan.push("不要晚餐後再大幅跨區，晚上收在同一區通常最舒服。");
 
-  if (budget) {
-    optimizedPlan.push(`因為你有提到預算方向「${budget}」，所以不建議把高單價體驗全塞在同一兩天。`);
-  }
-
-  if (spots.length > 0) {
-    optimizedPlan.push(`你現在列的點，建議先照地理位置分天，例如：${spots.slice(0, 3).join(" / ")}。`);
-  } else {
-    optimizedPlan.push(`如果你要我先幫你起一版，建議從 ${destination} 最經典、最順路的區域先排。`);
-  }
-
-  const safeDayCount = Math.max(1, Math.min(dayCount || 3, 6));
-  for (let i = 1; i <= safeDayCount; i++) {
-    if (i === 1) {
-      dailyPlan.push(`Day ${i}：抵達日只安排同區域輕鬆行程，先熟悉環境，不要第一天就排硬仗。`);
-    } else if (i === safeDayCount) {
-      dailyPlan.push(`Day ${i}：安排一個主要區域＋收尾購物或散步，避免最後一天做高風險跨區移動。`);
+  for (let i = 0; i < dayCount; i++) {
+    if (i === 0) {
+      dailyPlan.push(`Day ${i + 1}：抵達後先排同區輕鬆行程，不要第一天就排最硬的景點。`);
+    } else if (i === dayCount - 1) {
+      dailyPlan.push(`Day ${i + 1}：安排一個主要區域 + 收尾購物 / 散步，避免最後一天折返。`);
     } else {
-      dailyPlan.push(`Day ${i}：上午主景點，下午同區散步 / 咖啡 / 購物，晚餐不要再跨區。`);
+      dailyPlan.push(
+        `Day ${i + 1}：上午主景點，下午同區散步 / 咖啡 / 購物，晚餐不要再換太遠的區域。`
+      );
     }
   }
 
-  bookingSuggestions.push(
-    ...bookingCandidates.slice(0, 4).map((item, index) => ({
-      title: item.place_name || item.title,
-      reason:
-        index === 0
-          ? "這個最適合先鎖定，能先把你整趟行程的主線定下來。"
-          : "這個適合當成候選預約項目，等主線排好後再加入。",
-      href: item.href || "#",
-      buttonLabel: "查看方案",
-      badge: index === 0 ? "優先預約" : "體驗",
-      sourceLabel: item.sourceLabel || item.city || item.country || undefined,
-      image: item.image || undefined,
-      priceFrom: index === 0 ? "查看方案" : "待查看",
-      duration: index === 0 ? "半日 / 一日" : "依方案為準",
-      tag: index === 0 ? "AI 推薦" : "候選方案",
-    }))
-  );
-
   return {
-    summary: `${destination} 這趟不是不能玩，而是你目前比較像在列願望清單，還不是一份真正走起來舒服的版本。先把每天主區域、節奏和該先訂的東西定下來，整體體驗會差很多。`,
+    summary: `${destination} 這趟可以成行，但重點不是塞更多地方，而是先把動線、節奏和該先預約的東西理順。`,
     warnings,
     strategy,
     optimizedPlan,
-    bookingSuggestions,
+    bookingSuggestions: buildFallbackBookingSuggestions(bookingCandidates),
     dailyPlan,
     content: [
-      `如果我是直接幫你排這趟 ${destination}，我不會先追求去很多地方，而是先確保每天都順。`,
-      `你現在最需要處理的不是「還能不能再多加一個景點」，而是把每天主題區域先固定。`,
+      `如果我是直接幫你排 ${destination}，我不會先追求去更多地方，而是先確保每天都有節奏。`,
+      "先把主區域固定，再決定細項；先把主線商品鎖定，再補支線內容。",
       "",
-      "我會建議你這樣想：",
-      "1. 先定每天主區域",
-      "2. 先鎖最值得預約的門票 / 接送 / 體驗",
-      "3. 剩下的空檔再加散步、購物、咖啡店",
-      "",
-      "真正好玩的自由行，不是排最滿，而是每天都剛剛好。",
+      "真正讓旅行變順的，通常不是更多景點，而是更好的取捨。",
     ].join("\n"),
   };
 }
 
 export async function POST(req: Request) {
-  let destination = "";
-  let days = "";
-  let spots: string[] = [];
-  let companion = "";
-  let style = "";
-  let budget = "";
-  let mustAvoid = "";
-  let bookingCandidates: BookingCandidate[] = [];
-
   try {
     const body = (await req.json()) as RequestBody;
 
-    destination = cleanString(body.destination);
-    days = cleanString(body.days);
-    spots = Array.isArray(body.spots)
+    const destination = cleanString(body.destination);
+    const days = cleanString(body.days);
+    const spots = Array.isArray(body.spots)
       ? body.spots.map((s) => cleanString(s)).filter(Boolean)
       : [];
-    companion = cleanString(body.companion);
-    style = cleanString(body.style);
-    budget = cleanString(body.budget);
-    mustAvoid = cleanString(body.mustAvoid);
-    bookingCandidates = cleanBookingCandidates(body.bookingCandidates);
+    const companion = cleanString(body.companion);
+    const style = cleanString(body.style);
+    const budget = cleanString(body.budget);
+    const mustAvoid = cleanString(body.mustAvoid);
+    const bookingCandidates = Array.isArray(body.bookingCandidates) ? body.bookingCandidates : [];
 
     if (!destination) {
       return NextResponse.json({ error: "destination is required" }, { status: 400 });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
+
     if (!apiKey) {
       return NextResponse.json(
         buildFallbackResult({
@@ -330,130 +270,91 @@ export async function POST(req: Request) {
     const candidateText =
       bookingCandidates.length > 0
         ? bookingCandidates
-            .slice(0, 12)
-            .map((item, idx) =>
-              [
-                `候選 ${idx + 1}`,
-                `title: ${item.title}`,
-                `place_name: ${item.place_name || ""}`,
-                `description: ${item.description || ""}`,
-                `category: ${item.category || ""}`,
-                `country: ${item.country || ""}`,
-                `city: ${item.city || ""}`,
-                `location: ${item.location || ""}`,
-                `href: ${item.href || ""}`,
-                `sourceLabel: ${item.sourceLabel || ""}`,
-                `image: ${item.image || ""}`,
-              ].join("\n")
-            )
-            .join("\n\n")
-        : "目前沒有可直接導購的候選項目。";
+            .slice(0, 8)
+            .map((item, index) => {
+              const title = cleanString(item.place_name) || cleanString(item.title);
+              const desc = cleanString(item.description);
+              const href = cleanString(item.href);
+              const source =
+                cleanString(item.sourceLabel) ||
+                cleanString(item.city) ||
+                cleanString(item.country) ||
+                "";
+              return `${index + 1}. 標題：${title}｜說明：${desc}｜來源：${source}｜連結：${href}`;
+            })
+            .join("\n")
+        : "目前沒有提供可用候選方案";
 
-    const systemPrompt = `
-你是一位高階 AI 旅遊專員。
-你不是客服，也不是只會列點的摘要機器。
+    const prompt = `
+你是一位真的懂旅遊節奏與消費取捨的 AI 顧問，不是制式行程機器。
 
 你的任務：
-1. 判斷這個行程哪裡不合理
-2. 重整成真正能玩的版本
-3. 幫使用者抓出節奏、取捨、預約順序
-4. 從候選商品中挑出最適合先買的項目
+1. 先指出風險與容易後悔的地方
+2. 提供真正有判斷的策略與優化方向
+3. 排出簡潔可行的 Day by Day
+4. 從候選方案中挑出值得先看的項目
 
-風格要求：
-- 像資深自由行顧問
-- 有判斷、有取捨
-- 不要什麼都說可以
-- 不要空泛
-- dailyPlan 要真的可執行
-- content 要像在跟朋友講，而不是機器
+使用者資料：
+- 目的地 / 主題：${destination}
+- 天數：${days || "未指定"}
+- 想去景點：${spots.join("、") || "未指定"}
+- 同行類型：${companion || "未指定"}
+- 偏好節奏：${style || "未指定"}
+- 預算方向：${budget || "未指定"}
+- 最不想踩的坑：${mustAvoid || "未指定"}
 
-你只能輸出合法 JSON。
-你只能使用繁體中文。
-不要輸出 markdown code block。
-`;
-
-    const userPrompt = `
-請幫我做一份有質感的 AI 旅遊專員規劃。
-
-【使用者需求】
-地點：${destination}
-天數：${days || "未指定"}
-景點：${spots.join("、") || "尚未指定，請主動規劃"}
-同行：${companion || "未指定"}
-偏好節奏：${style || "未指定"}
-預算方向：${budget || "未指定"}
-不想踩的坑：${mustAvoid || "未指定"}
-
-【可直接導購 / 可直接預約的候選項目】
+候選方案資料：
 ${candidateText}
 
-請輸出 JSON：
+請只回傳 JSON，不要加任何額外說明，不要使用 markdown code block。
+格式必須完全如下：
 
 {
-  "summary": "2到4句，像顧問直接講重點",
-  "warnings": ["3到5條具體避坑提醒"],
-  "strategy": ["3到5條整體策略判斷"],
-  "optimizedPlan": ["4到6條具體優化方向"],
-  "dailyPlan": [
-    "Day 1：具體安排",
-    "Day 2：具體安排"
+  "summary": "2 到 3 句繁體中文總評，口吻像真的旅遊顧問，有判斷，不要空泛",
+  "warnings": [
+    "3 到 5 條具體避坑提醒"
+  ],
+  "strategy": [
+    "3 到 5 條整體策略"
+  ],
+  "optimizedPlan": [
+    "4 到 6 條具體優化建議"
   ],
   "bookingSuggestions": [
     {
-      "title": "具體推薦項目名稱",
-      "reason": "為什麼現在該先買",
-      "href": "只能從候選項目裡挑",
-      "buttonLabel": "查看方案",
-      "badge": "例如：門票 / 接送 / 包車 / 體驗 / 優先預約",
-      "sourceLabel": "可用 place_name 或 sourceLabel",
-      "image": "若候選有 image 就優先帶入，沒有可留空字串",
-      "priceFrom": "用簡短字串，例如：¥3,500起 / 查看方案 / 依頁面為準",
-      "duration": "用簡短字串，例如：3小時 / 半日 / 一日 / 依方案為準",
-      "tag": "例如：AI 推薦 / 親子適合 / 先鎖主線 / 熱門"
+      "title": "方案名稱",
+      "reason": "為什麼值得先看",
+      "href": "可直接點擊的網址",
+      "buttonLabel": "查看",
+      "badge": "優先/候選/門票/接送/包車/體驗 其中之一或類似短字",
+      "sourceLabel": "來源名稱",
+      "image": "",
+      "priceFrom": "查看方案",
+      "duration": "依方案為準",
+      "tag": "AI 建議"
     }
   ],
-  "content": "像資深旅遊顧問在幫朋友排旅程，完整講出這趟應該怎麼玩、怎麼刪、怎麼留白、哪些該先訂"
+  "dailyPlan": [
+    "Day 1：......",
+    "Day 2：......"
+  ],
+  "content": "用 5 到 10 句繁體中文，像真人顧問一樣完整講清楚判斷與取捨"
 }
 
 規則：
-- bookingSuggestions 最多 4 個
-- href 只能從我提供的候選項目裡挑
-- image 若候選有就優先沿用
-- priceFrom 與 duration 可用保守描述，不要亂編過度具體假資訊
-- 候選項目不夠適合時可以少給，不要硬湊
-- 沒有景點時要主動規劃第一次去最順的版本
-- 太空時主動補強
-- 太滿時主動刪減
-- dailyPlan 不能空泛
+- 一律繁體中文
+- 不要空話
+- 如果候選方案不足，bookingSuggestions 可以是空陣列
+- href 必須是有效字串；如果沒有候選方案就不要亂編
+- dailyPlan 要根據天數輸出
 `;
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o",
-      temperature: 0.7,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
+    const response = await client.responses.create({
+      model: "gpt-4o-mini",
+      input: prompt,
     });
 
-    const text = completion.choices?.[0]?.message?.content?.trim() || "";
-
-    if (!text) {
-      return NextResponse.json(
-        buildFallbackResult({
-          destination,
-          days,
-          spots,
-          companion,
-          style,
-          budget,
-          mustAvoid,
-          bookingCandidates,
-        }),
-        { status: 200 }
-      );
-    }
+    const text = response.output_text?.trim() || "";
 
     let parsed: unknown;
     try {
@@ -492,22 +393,15 @@ ${candidateText}
       );
     }
 
-    return NextResponse.json(normalized, { status: 200 });
+    return NextResponse.json(normalized);
   } catch (error) {
-    console.error("API /api/pit fatal error:", error);
+    console.error("API /api/pit error:", error);
 
     return NextResponse.json(
-      buildFallbackResult({
-        destination,
-        days,
-        spots,
-        companion,
-        style,
-        budget,
-        mustAvoid,
-        bookingCandidates,
-      }),
-      { status: 200 }
+      {
+        error: "AI planning failed",
+      },
+      { status: 500 }
     );
   }
 }

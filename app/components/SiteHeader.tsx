@@ -80,12 +80,7 @@ export default function SiteHeader() {
   }, []);
 
   const avatarUrl = useMemo(() => {
-    return (
-      profile?.avatar_url ||
-      user?.user_metadata?.avatar_url ||
-      user?.user_metadata?.picture ||
-      null
-    );
+    return profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null;
   }, [profile, user]);
 
   const displayName = useMemo(() => {
@@ -119,17 +114,17 @@ export default function SiteHeader() {
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
             <img
               src="/becalm-main-logo.png"
-              alt="BeCalm Travel"
+              alt="BeCalm"
               className="h-full w-full object-contain p-1"
             />
           </div>
 
           <div className="min-w-0">
             <div className="truncate text-2xl font-black text-[#0b1736] sm:text-3xl">
-              BeCalm Travel
+              BeCalm
             </div>
             <div className="truncate text-sm text-slate-500 sm:text-base">
-              先避坑，再出發
+              先看真實經驗，再決定值不值得
             </div>
           </div>
         </Link>
@@ -140,7 +135,7 @@ export default function SiteHeader() {
             className="hidden items-center gap-2 rounded-full bg-[#0b1736] px-4 py-2 text-sm font-bold text-white sm:inline-flex"
           >
             <PenSquare className="h-4 w-4" />
-            分享旅遊避坑
+            分享避坑
           </Link>
 
           {!loading && user ? (
@@ -174,9 +169,7 @@ export default function SiteHeader() {
                     <div className="truncate text-sm font-bold text-slate-900">
                       {displayName}
                     </div>
-                    <div className="truncate text-xs text-slate-500">
-                      {user.email || ""}
-                    </div>
+                    <div className="truncate text-xs text-slate-500">{user.email || ""}</div>
                   </div>
 
                   <Link
