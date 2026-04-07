@@ -181,6 +181,7 @@ function normalizeAIResult(input: unknown): PlannerResult | null {
 }
 
 function getPostPrimaryActionLink(post: Post) {
+  if (post.booking_url) return post.booking_url;
   if (post.external_url) return post.external_url;
   if (post.google_maps_url) return post.google_maps_url;
   return `/post/${post.id}`;
@@ -198,7 +199,7 @@ function buildBookingCandidates(posts: Post[]): BookingCandidate[] {
       country: post.country || null,
       city: post.city || null,
       location: post.location || null,
-      href: post.booking_url || getPostPrimaryActionLink(post),
+      href: getPostPrimaryActionLink(post),
       sourceLabel: post.place_name || post.title,
       image: post.image_url || null,
     }));
@@ -226,21 +227,21 @@ function buildFallbackPlannerResult(params: {
     };
   }
 
-  const dayCount = Math.max(1, Math.min(Number(days || 3), 7));
+  const dayCount = Math.max(1, Math.min(Number(days || 3), 6));
 
   return {
-    summary: `${destination} 可以去，但先把節奏排順比較重要。`,
+    summary: `${destination} 這趟先把主區域排順，會比一直加景點更重要。`,
     warnings: [
       spots.length > dayCount * 3
         ? "景點有點多，容易太趕。"
-        : "先固定主區域會比較順。",
+        : "先固定每天主區域會比較順。",
       companion === "家庭親子"
         ? "親子行程不要排太滿。"
         : companion === "長輩同行"
         ? "有長輩同行，移動不要太多。"
         : "熱門點不要都塞同一天。",
       style.includes("輕鬆") ? "你偏好輕鬆節奏，就不要一直跨區。" : "先抓主線，再補支線。",
-    ],
+    ].filter(Boolean),
     strategy: ["先定主區域", "先看必去點", "先鎖需要預約的項目"],
     optimizedPlan: ["上午主景點", "下午同區活動", "晚上不要再大跨區"],
     dailyPlan: Array.from({ length: dayCount }).map((_, i) =>
@@ -259,23 +260,87 @@ function buildFallbackPlannerResult(params: {
       sourceLabel: item.sourceLabel || undefined,
       image: item.image || undefined,
       tag: index === 0 ? "AI" : "參考",
+      priceFrom: "查看方案",
+      duration: "依方案為準",
     })),
     content: `${destination} 這趟先不要貪多，排順最重要。`,
   };
 }
 
-function MiniPostCard({ post }: { post: Post }) {
+function HeroPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/10">
+      {children}
+    </span>
+  );
+}
+
+function SimplePlanCard({
+  title,
+  items,
+  tone = "slate",
+}: {
+  title: string;
+  items: string[];
+  tone?: "slate" | "amber";
+}) {
+  const cardTone =
+    tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-950"
+      : "border-slate-200 bg-slate-50 text-slate-800";
+
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-2xl font-black text-slate-900">{title}</div>
+
+      {items.length === 0 ? (
+        <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-400">—</div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {items.map((item, index) => (
+            <div
+              key={`${item}-${index}`}
+              className={`rounded-2xl border px-4 py-4 text-sm leading-7 ${cardTone}`}
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+}: {
+  title: string;
+  value?: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="text-2xl font-black text-slate-900">{title}</div>
+      <div className="mt-4 rounded-2xl bg-slate-50 px-5 py-5 text-base leading-8 text-slate-700 whitespace-pre-wrap">
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function RelatedPostCard({ post }: { post: Post }) {
   const locationText = [post.country, post.city, post.location].filter(Boolean).join(" · ");
 
   return (
     <Link
       href={`/post/${post.id}`}
-      className="group rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white">
           {post.category}
         </span>
+
         {post.country ? (
           <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
             {post.country}
@@ -298,23 +363,6 @@ function MiniPostCard({ post }: { post: Post }) {
   );
 }
 
-function SimpleResultCard({
-  title,
-  value,
-}: {
-  title: string;
-  value?: string;
-}) {
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="text-2xl font-black text-slate-900">{title}</div>
-      <div className="mt-5 rounded-[22px] bg-slate-50 px-5 py-5 text-base leading-8 text-slate-700">
-        {value || "—"}
-      </div>
-    </div>
-  );
-}
-
 function SuggestionCard({ card }: { card: BookingSuggestion }) {
   const isExternal = card.href.startsWith("http");
 
@@ -324,6 +372,7 @@ function SuggestionCard({ card }: { card: BookingSuggestion }) {
         <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white">
           {card.badge}
         </span>
+
         {card.tag ? (
           <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
             {card.tag}
@@ -358,6 +407,7 @@ export default function HomePage() {
   const [companion, setCompanion] = useState<CompanionType>("情侶");
   const [style, setStyle] = useState("輕鬆一點");
 
+  const [hasPlanned, setHasPlanned] = useState(false);
   const [aiResult, setAiResult] = useState<PlannerResult | null>(null);
   const [loadingAI, setLoadingAI] = useState(false);
 
@@ -429,6 +479,7 @@ export default function HomePage() {
         let score = 0;
 
         if (dest && haystack.includes(dest)) score += 4;
+
         for (const keyword of spotKeywords) {
           if (keyword && haystack.includes(keyword)) score += 2;
         }
@@ -461,8 +512,12 @@ export default function HomePage() {
   const effectivePlanner = aiResult || fallbackPlanner;
 
   async function handlePlanNow() {
-    if (!destination.trim()) return;
+    if (!destination.trim()) {
+      alert("請先輸入目的地");
+      return;
+    }
 
+    setHasPlanned(true);
     setLoadingAI(true);
     setAiResult(null);
 
@@ -487,6 +542,8 @@ export default function HomePage() {
 
       if (normalized) {
         setAiResult(normalized);
+      } else {
+        setAiResult(null);
       }
     } catch (error) {
       console.error(error);
@@ -503,29 +560,23 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
         <SiteHeader />
 
-        <section className="overflow-hidden rounded-[38px] bg-[radial-gradient(circle_at_top_left,_rgba(82,133,255,0.22),_transparent_32%),linear-gradient(135deg,#081226_0%,#0b1730_40%,#0f1f42_100%)] text-white shadow-[0_24px_70px_rgba(15,23,42,0.28)]">
-          <div className="grid gap-8 px-6 py-6 sm:px-8 sm:py-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="overflow-hidden rounded-[40px] bg-[radial-gradient(circle_at_top_left,_rgba(82,133,255,0.22),_transparent_32%),linear-gradient(135deg,#081226_0%,#0b1730_40%,#0f1f42_100%)] text-white shadow-[0_24px_70px_rgba(15,23,42,0.28)]">
+          <div className="grid gap-8 px-6 py-7 sm:px-8 sm:py-9 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="max-w-2xl">
               <div className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/10">
-                Real Reviews + AI
+                Real Reviews First
               </div>
 
               <h1 className="mt-5 text-5xl font-black leading-[1.08] sm:text-7xl">
-                先看真實經驗，
+                先看別人
                 <br className="hidden sm:block" />
-                再讓 AI 幫你判斷值不值得。
+                怎麼踩雷。
               </h1>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/10">
-                  真實貼文
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/10">
-                  避坑重點
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium ring-1 ring-white/10">
-                  AI 判讀
-                </span>
+                <HeroPill>真實貼文</HeroPill>
+                <HeroPill>簡單規劃</HeroPill>
+                <HeroPill>避坑內容</HeroPill>
               </div>
             </div>
 
@@ -545,7 +596,6 @@ export default function HomePage() {
                     min={1}
                     value={days}
                     onChange={(e) => setDays(e.target.value)}
-                    placeholder="天數"
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-slate-400"
                   />
 
@@ -593,8 +643,9 @@ export default function HomePage() {
 
         {destination.trim() ? (
           <section className="mt-6 rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
-              <div className="text-3xl font-black text-slate-900">相關貼文</div>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="text-3xl font-black text-slate-900">相關避坑</div>
+
               <Link
                 href="/write"
                 className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -606,23 +657,30 @@ export default function HomePage() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {relatedPosts.length === 0 ? (
                 <div className="rounded-2xl bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                  找不到相關貼文
+                  沒有相關貼文
                 </div>
               ) : (
-                relatedPosts.map((post) => <MiniPostCard key={post.id} post={post} />)
+                relatedPosts.map((post) => <RelatedPostCard key={post.id} post={post} />)
               )}
             </div>
           </section>
         ) : null}
 
-        {aiResult ? (
+        {hasPlanned ? (
           <section className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
-            <SimpleResultCard title="AI 總評" value={effectivePlanner.summary} />
-            <SimpleResultCard title="AI 建議" value={effectivePlanner.content} />
+            <SimplePlanCard title="簡單規劃" items={effectivePlanner.dailyPlan} />
+            <SummaryCard title="總評" value={effectivePlanner.summary || effectivePlanner.content} />
+
+            {effectivePlanner.warnings.length > 0 ? (
+              <div className="xl:col-span-2">
+                <SimplePlanCard title="注意" items={effectivePlanner.warnings} tone="amber" />
+              </div>
+            ) : null}
 
             {effectivePlanner.bookingSuggestions.length > 0 ? (
               <div className="xl:col-span-2 rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-5 text-3xl font-black text-slate-900">建議先看</div>
+
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {effectivePlanner.bookingSuggestions.map((card, index) => (
                     <SuggestionCard key={`${card.title}-${index}`} card={card} />
@@ -633,10 +691,8 @@ export default function HomePage() {
           </section>
         ) : null}
 
-        <section className="mt-6">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-3xl font-black text-slate-900">最新貼文</div>
-          </div>
+        <section className="mt-8">
+          <div className="mb-4 text-3xl font-black text-slate-900">最新貼文</div>
 
           {latestPosts.length === 0 ? (
             <div className="rounded-[28px] border border-slate-200 bg-white p-8 text-center text-slate-500 shadow-sm">
